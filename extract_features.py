@@ -36,7 +36,6 @@ def read_data():
         d[urls[i]] = labels[i]
     return d
 
-
 def url_parser(url):
     parts = urlparse(url)
     eles = {
@@ -87,20 +86,9 @@ def segment_query(query):
     # print("QUERY", query_parts)
     return query_parts
 
-
-# words.extend
-
-    d = parts.path.strip('/').split('/')
-    queries = parts.query.strip('/').split('&')
-
 def get_substrings(url):
     eles = url_parser(url)
     # if has params, segment it same as path (params using ';' seperate with path)
-    # if eles["params"] != '':
-    #     print("URL HAS PARAMS", url )
-    #     print(eles)
-    # print("URL     ", url)
-    # print('ELEMENTS', eles)
     substrings = []
     if eles["netloc"] != '':
         # print("netloc", eles["netloc"])
@@ -124,26 +112,37 @@ def get_substrings(url):
     # print(substrings)
     return substrings
 
-
-
-# def romove_stop_words(url):
-
-# extract domain from URL
+# pip install tldextract
+import tldextract
 def get_domain(url):
     parsed_url = urlparse(url)
-    domain = parsed_url.netloc
-    return domain
+    hostname = parsed_url.hostname
+    print("hostname", hostname)
+    extracted = tldextract.extract(hostname)
+    # print("subdomain", extracted.subdomain)
+    # print("domain", extracted.domain)
+    # print("TLD", extracted.suffix)
+    domain = extracted.domain
+    TLD = extracted.suffix
+    domain_name = domain + '.' + TLD
+    return domain_name
+
 # python -m pip install requests
+from key import KEY
 import requests
 def get_IP(domain):
-    url = "https://www.virustotal.com/api/v3/domains/" + domain + "/relationship?limit=10"
-    # url = "https://www.virustotal.com/api/v3/domains/" + domain
-    print("url", url)
+    url = "https://www.virustotal.com/api/v3/domains/" + domain + "/resolutions?limit=40"
     headers = {"accept": "application/json",
-               "x-apikey": "key"}
-    # response = requests.get(url, headers=headers)
-    # print(response.text)
-    return 0
+               "x-apikey": KEY}
+    response = requests.get(url, headers=headers)
+    rs = response.json()
+    data = rs["data"]
+    IP_list = []
+    for i in range(len(data)):
+        attributes = data[i]["attributes"]
+        IP = attributes["ip_address"]
+        IP_list.append(IP)
+    return IP_list
 
 import dns.resolver
 def get_autoritative_nameserver(url, doamin):
@@ -156,22 +155,24 @@ def get_autoritative_nameserver(url, doamin):
         server = []
     return server
 
+# threshold = 800 
 from collections import Counter
 def remove_stop_words(words):
     word_couter = Counter(words)
-    # sorted_words = sorted(word_couter.items(), key = lambda item: item[1], reverse = True)
-    # print("words", len(word_couter))
     threshold = 5
     remain_words = []
-    # if freq > 800, stop words not add it to words list
     for w in word_couter.keys():
-        # print(w, ":", word_couter[w])
         if word_couter[w] <= threshold:
             remain_words.append(w)
-    # print('remain', len(remain_words))
     return remain_words
 
 # def get_nameserver(url):
+
+def unique(l):
+    list_set = set(l)
+    unique_list = (list(list_set))
+    return unique_list
+
 # main code: 
 # 1. read data X=[urls], Y = [lables] 
 # 2. extract domain of each url, assign it to URL
@@ -182,22 +183,32 @@ def remove_stop_words(words):
 data = read_data()
 nodes = []
 words = []
+IP_addresses = []
 for key, value in data.items():
     rs = URL('','','','','','')
     rs.url = key
     rs.label = value
     rs.domain = get_domain(key)
-    print("domain",rs.domain)
-#     rs.IP = get_IP(rs.domain)
-#     rs.substring = get_substrings(key)
-#     # rs.nameserver = get_autoritative_nameserver(key, rs.domain)
-#     if rs.substring:
-#         words.extend(rs.substring)
-#     nodes.append(rs)
-# # print("init words length", len(words))
-# network_words = remove_stop_words(words)
+    rs.substring = get_substrings(key)
+    if rs.substring:
+        words.extend(rs.substring) 
+    rs.IP = get_IP(rs.domain)
+    if rs.IP:
+        IP_addresses.extend(rs.IP)
+    # rs.nameserver = get_autoritative_nameserver(key, rs.domain)
+
+    # all nodes of graph
+    nodes.append(rs)
+print("nodes RESULT", nodes)
+# IP only contains distinct IPs
+IP_addresses = unique(IP_addresses)
+print("IP RESULT", IP_addresses)
+# remove stop words (freq > 800) from substrings
+network_words = remove_stop_words(words)
+print("words RESULT", network_words)
 # print("network word number", len(network_words))
+
+
 # for each url, find if network_word included in url. If yes, add new edge
-get_IP("www.avclub.com")
 
      
