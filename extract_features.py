@@ -23,7 +23,7 @@ class g:
 
 # read all urls and label, convert into dic {url: label}
 def read_data():
-    df = pd.concat(map(pd.read_csv, glob.glob(os.path.join('', './data/test.csv'))))
+    df = pd.concat(map(pd.read_csv, glob.glob(os.path.join('', './data/*.csv'))))
     X = df["URL"].values
     Y = df["Productivity"].values
     Y = Y.astype('int')
@@ -113,11 +113,13 @@ def get_substrings(url):
     return substrings
 
 # pip install tldextract
-import tldextract
-def get_domain(url):
+def get_hostname(url):
     parsed_url = urlparse(url)
     hostname = parsed_url.hostname
-    print("hostname", hostname)
+    return hostname
+
+import tldextract
+def get_domain(hostname):
     extracted = tldextract.extract(hostname)
     # print("subdomain", extracted.subdomain)
     # print("domain", extracted.domain)
@@ -144,16 +146,19 @@ def get_IP(domain):
         IP_list.append(IP)
     return IP_list
 
-import dns.resolver
-def get_autoritative_nameserver(url, doamin):
-    # find domain name, query DNS (dnspython)
+import subprocess
+def get_authoritative_nameserver(domain):
+    servers = []
     try:
-        rs = dns,resolver.resolve(doamin, 'NS')
-        server = [str(r) for r in rs]
+        rs = subprocess.run(['dig', '+short', 'NS', domain], capture_output=True, text=True)
+        if rs.returncode == 0:
+            out = rs.stdout.strip().split('\n')
+            if out != ['']:
+                servers = out
     except Exception as e:
-        print(f"Error fetching authoritative name server for {url}: {e}")
-        server = []
-    return server
+        print(f"Error fetching authoritative name server: {e}")
+    
+    return servers
 
 # threshold = 800 
 from collections import Counter
@@ -173,6 +178,13 @@ def unique(l):
     unique_list = (list(list_set))
     return unique_list
 
+import pickle
+def store_data(data, filename):
+    file = open(filename, 'wb')
+    pickle.dump(data, file)
+    file.close()
+
+
 # main code: 
 # 1. read data X=[urls], Y = [lables] 
 # 2. extract domain of each url, assign it to URL
@@ -184,31 +196,49 @@ data = read_data()
 nodes = []
 words = []
 IP_addresses = []
+nameservers = []
 for key, value in data.items():
-    rs = URL('','','','','','')
-    rs.url = key
-    rs.label = value
-    rs.domain = get_domain(key)
-    rs.substring = get_substrings(key)
-    if rs.substring:
-        words.extend(rs.substring) 
-    rs.IP = get_IP(rs.domain)
-    if rs.IP:
-        IP_addresses.extend(rs.IP)
-    # rs.nameserver = get_autoritative_nameserver(key, rs.domain)
+    hostname = get_hostname(key)
+    if hostname:
+        rs = URL('','','','','','')
+        rs.url = key
+        rs.label = value
+        rs.domain = get_domain(hostname)
+        rs.substring = get_substrings(key)
+        if rs.substring:
+            words.extend(rs.substring) 
+#       rs.IP = get_IP(rs.domain)
+#       if rs.IP:
+#           IP_addresses.extend(rs.IP)
+#       rs.nameserver = get_authoritative_nameserver(rs.domain)
+#       if rs.nameserver:
+#           nameservers.extend(rs.nameserver)
+    else:
+        print("No hostname", key)
 
-    # all nodes of graph
-    nodes.append(rs)
-print("nodes RESULT", nodes)
-# IP only contains distinct IPs
-IP_addresses = unique(IP_addresses)
-print("IP RESULT", IP_addresses)
+
+
+# #     nodes.append(rs)
+# # print("nodes RESULT", nodes)
+# # IP, nameserver only contains distinct ones
+# IP_addresses = unique(IP_addresses)
+# print("IPs", len(IP_addresses))
+# nameservers = unique(nameservers)
+# print("nameservers", len(nameservers))
 # remove stop words (freq > 800) from substrings
+print("before words", len(words))
 network_words = remove_stop_words(words)
-print("words RESULT", network_words)
-# print("network word number", len(network_words))
-
-
+print("after words", len(network_words))
+store_data(network_words, './features/substrings')
 # for each url, find if network_word included in url. If yes, add new edge
-
-     
+# graph - 
+#         nodes=[urls(54721), IPs(), words(), nameserver()]
+#         edges = matrix (same x,y which is nodes, if has relation then 1, else 0)
+# extract data stored:
+# 1. words (substrings) 
+# 2. IPs 
+# 3. nameservers
+# 4. urls (URL which contains ralationships with other part)
+# 5. ground_truth_urls (ground_truth = [url : label])
+# 6. community_truth (all nodes = [node : label], label get from ?????)
+# get_authoritative_nameserver("avclub.com")
