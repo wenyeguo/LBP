@@ -7,23 +7,12 @@ import pandas as pd
 from urllib.parse import urlparse
 import re
 import matplotlib.pyplot as plt
-
-class URL:
-    def __init__(self, url, domain, substrings, IP, nameserver, label):
-        self.url = url
-        self.domain = domain
-        self.substring = substrings
-        self.IP = IP
-        self.nameserver = nameserver
-        self.label = label
-class g:
-     def __init__(self, nodes, edges):
-          self.nodes = nodes
-          self.edges = edges
+import json
+from new_class import URL
 
 # read all urls and label, convert into dic {url: label}
 def read_data():
-    df = pd.concat(map(pd.read_csv, glob.glob(os.path.join('', './data/*.csv'))))
+    df = pd.concat(map(pd.read_csv, glob.glob(os.path.join('', './data/test.csv'))))
     X = df["URL"].values
     Y = df["Productivity"].values
     Y = Y.astype('int')
@@ -127,23 +116,29 @@ def get_domain(hostname):
     domain = extracted.domain
     TLD = extracted.suffix
     domain_name = domain + '.' + TLD
+    # print(hostname, ":", domain_name)
     return domain_name
 
 # python -m pip install requests
 from key import KEY
 import requests
 def get_IP(domain):
+    IP_list = []
     url = "https://www.virustotal.com/api/v3/domains/" + domain + "/resolutions?limit=40"
     headers = {"accept": "application/json",
                "x-apikey": KEY}
     response = requests.get(url, headers=headers)
     rs = response.json()
-    data = rs["data"]
-    IP_list = []
-    for i in range(len(data)):
-        attributes = data[i]["attributes"]
-        IP = attributes["ip_address"]
-        IP_list.append(IP)
+    # print("rs", rs)
+    if "error" in rs:
+        print("ERROR", domain)
+    else:
+        if "data" in rs:
+            data = rs["data"]
+            for i in range(len(data)):
+                attributes = data[i]["attributes"]
+                IP = attributes["ip_address"]
+                IP_list.append(IP)
     return IP_list
 
 import subprocess
@@ -161,17 +156,55 @@ def get_authoritative_nameserver(domain):
     return servers
 
 # threshold = 800 
+import math
+def perpendicular_distance(x1, y1, x2, y2, x, y):
+    numerator = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1))
+    denominator = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    distance = numerator / denominator
+    return distance
+
 from collections import Counter
+def find_saturation_point(word_couter):
+    # print("WORD COUNTER", word_couter)
+    sorted_words = sorted(word_couter.items(), key=lambda x:x[1], reverse=True)
+
+    freq = []
+    for word, f in sorted_words:
+        freq.append(f)
+    max_x = 0
+    max_y = freq[max_x]
+    min_x = len(freq) - 1
+    min_y = freq[min_x]
+    distance = []
+    for i in range(len(freq)):
+        distance.append(perpendicular_distance(min_x, min_y, max_x, max_y, i, freq[i]))
+    distance = np.array(distance)
+    max_distance_index = np.argmax(distance)
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(freq, marker='.')
+    # plt.scatter(max_distance_index, freq[max_distance_index], color='red', label='Saturation Point')
+    # plt.xlabel('Words Index')
+    # plt.ylabel('Frequency')
+    # plt.title('Word Frequency Distribution with Saturation Point')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+
+    # Determine the saturation point frequency
+    saturation_frequency = freq[max_distance_index]
+    print(f"Saturation point frequency: {saturation_frequency}")
+    
+    return saturation_frequency
+
+# def get_nameserver(url):
 def remove_stop_words(words):
     word_couter = Counter(words)
-    threshold = 5
+    threshold = find_saturation_point(word_couter)
     remain_words = []
     for w in word_couter.keys():
         if word_couter[w] <= threshold:
             remain_words.append(w)
     return remain_words
-
-# def get_nameserver(url):
 
 def unique(l):
     list_set = set(l)
@@ -194,37 +227,70 @@ def store_data(data, filename):
 # words used to store all words appeared in URLs, then using elbow method remove high freq words. then rest words used in network
 data = read_data()
 nodes = []
+urls = []
 words = []
+domains = []
 IP_addresses = []
 nameservers = []
+c = 0
+# virustotal: 400 IP request/day
+        
+hostnames = []
 for key, value in data.items():
     hostname = get_hostname(key)
+    hostnames.append(hostname)
     if hostname:
         rs = URL('','','','','','')
         rs.url = key
+        urls.append(rs.url)
         rs.label = value
         rs.domain = get_domain(hostname)
-        rs.substring = get_substrings(key)
-        if rs.substring:
-            words.extend(rs.substring) 
-#       rs.IP = get_IP(rs.domain)
-#       if rs.IP:
-#           IP_addresses.extend(rs.IP)
-#       rs.nameserver = get_authoritative_nameserver(rs.domain)
-#       if rs.nameserver:
-#           nameservers.extend(rs.nameserver)
+        # print(rs.domain)
+        if rs.domain:
+            domains.append(rs.domain)
+        rs.IP = get_IP(rs.domain)
+        if rs.IP:
+            IP_addresses.extend(rs.IP)
+        else:
+            print("No IP", rs.domain)
+        rs.substrings = get_substrings(key)
+        # print("SUBTRING SIZE", len(rs.substrings))
+        if rs.substrings:
+            words.extend(rs.substrings) 
+        rs.nameserver = get_authoritative_nameserver(rs.domain)
+        if rs.nameserver:
+            nameservers.extend(rs.nameserver)
+        else:
+            c += 1
+            print("No nameserver", rs.domain, c)
     else:
         print("No hostname", key)
+    nodes.append(rs)
 
+# print("before hostname", len(hostnames))
+# hostnames = unique(hostnames)
+# print("after hostname", len(hostnames))
+urls = unique(urls)
+print("url Size", len(urls))
+store_data(urls, './features/urls')
 
+print("nodes", len(nodes))
+store_data(nodes, './features/nodes')
+# print(nodes)
 
-# #     nodes.append(rs)
-# # print("nodes RESULT", nodes)
-# # IP, nameserver only contains distinct ones
-# IP_addresses = unique(IP_addresses)
-# print("IPs", len(IP_addresses))
-# nameservers = unique(nameservers)
-# print("nameservers", len(nameservers))
+print("domains", len(domains))
+domains = unique(domains)
+print("unique domains", (domains))
+store_data(domains, './features/domains')
+
+print("IP", len(IP_addresses))
+IP_addresses = unique(IP_addresses)
+print("unique IP", (IP_addresses))
+store_data(IP_addresses, './features/address')
+
+nameservers = unique(nameservers)
+print("nameservers", (nameservers))
+store_data(nameservers, './features/nameservers')
 # remove stop words (freq > 800) from substrings
 print("before words", len(words))
 network_words = remove_stop_words(words)
@@ -242,3 +308,9 @@ store_data(network_words, './features/substrings')
 # 5. ground_truth_urls (ground_truth = [url : label])
 # 6. community_truth (all nodes = [node : label], label get from ?????)
 # get_authoritative_nameserver("avclub.com")
+
+# each nodes = vector representation ==> later used to calculate edge potential(joint probbility)
+# msg passing using min value ==> exchange many times (cost of different labels)
+
+# 1. get IP website has constraint 40/day
+# 2. can some url don't have IP/name server
