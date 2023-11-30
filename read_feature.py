@@ -96,11 +96,12 @@ pos = nx.spring_layout(G)  # Positions for all nodes
 nx.draw(G, pos, with_labels=False, node_color='skyblue', node_size=10)
 plt.show()
 
-print("Nodes Size:", len(G.nodes()))
-print("Edges Size:", len(G.edges()))
+print("Nodes Size:", G.number_of_nodes() ,len(G.nodes()))
+print("Edges Size:", G.number_of_edges(), len(G.edges()))
                     
-        
-
+# nx.write_gpickle(G, "./features/graph.gpickle")      
+with open("./features/graph.gpickle", 'wb') as f:
+    pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
 
 # add url, domain, ip, nameserver, substrings as nodes
 
