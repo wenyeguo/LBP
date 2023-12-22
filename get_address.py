@@ -1,5 +1,4 @@
-from new_class import URL
-from new_class import load_data, store_data
+from new_class import URL, load_data, store_data
 from key import KEY
 import requests
 import json

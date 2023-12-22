@@ -61,6 +61,12 @@ def extract_features_from_nodes(nodes, filename):
     ips = []
     domains = []
     words = []
+    list = ['goo.gl', 'http://satreg784.3utilities.com/sat/oauth-hotmail.php',
+            'https://docs.google.com/document/d/12zC9BxRtuj1tZG3oN5c0yWgfvqiRDAcM27SAPhLcxGI/edit',
+            'https://docs.google.com/forms/d/1eVzDn_8RzxN2pzxJiLhGmmyucJvuVv3bNGbSyRswos0/prefill', 'youtu.be',
+            'http://myfidelitybankbenefits.com/myfidelitybankbenefits.com',
+            'http://www.myfidelitybankbenefits.com/myfidelitybankbenefits.com/']
+
     for node in nodes:
         node_url = node.get_url()
         node_label = node.get_label()
@@ -74,34 +80,39 @@ def extract_features_from_nodes(nodes, filename):
 
         node_ip = node.get_address()
         ips.extend(node_ip)
-
         node_words = node.get_substrings()
+        for str in list:
+            if str in node_words:
+                print('yes', str)
+                print(f'NODE {node_url}')
+
         words.extend(node_words)
 
-    print(
-        f'Before: nodes = {len(urls)}, nameserver = {len(nameservers)}, IPs = {len(ips)}, domains = {len(domains)}, '
-        f'words = {len(words)}')
-    nameservers = unique(nameservers)
-    ips = unique(ips)
-    domains = unique(domains)
-    words = remove_stop_words(words)
-
-    print(
-        f'After: nodes = {len(urls)}, nameserver = {len(nameservers)}, IPs = {len(ips)}, domains = {len(domains)}, '
-        f'words = {len(words)}')
+    # print(
+    #     f'Before: nodes = {len(urls)}, nameserver = {len(nameservers)}, IPs = {len(ips)}, domains = {len(domains)}, '
+    #     f'words = {len(words)}')
+    # nameservers = unique(nameservers)
+    # ips = unique(ips)
+    # domains = unique(domains)
+    # words = remove_stop_words(words)
     #
-    # # # store features
-    store_data(urls, filename + "urls")
-    store_data(domains, filename + "domains")
-    store_data(words, filename + "substrings")
-    store_data(ips, filename + "address")
-    store_data(nameservers, filename + "nameservers")
-    store_data(nodes, filename + "nodes")
+    # print(
+    #     f'After: nodes = {len(urls)}, nameserver = {len(nameservers)}, IPs = {len(ips)}, domains = {len(domains)}, '
+    #     f'words = {len(words)}')
+    # #
+    # # # # store features
+    # store_data(urls, filename + "urls")
+    # store_data(domains, filename + "domains")
+    # store_data(words, filename + "substrings")
+    # store_data(ips, filename + "address")
+    # store_data(nameservers, filename + "nameservers")
+    # store_data(nodes, filename + "nodes")
+    #
 
 
 # nodes = 25816, nameserver = 8617, IPs = 36416, domains = 7577, words = 31563
 # extract features from nodes
-nodes = load_data("./features/total_nodes/nodes")
+nodes = load_data("./features/d/data/nodes")
 # data = nodes[:10]
 # print(len(data))
 filename = 'features/d/data/'
