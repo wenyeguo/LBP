@@ -1,37 +1,15 @@
 import copy
 import pickle
 import time
-
-from new_class import load_data
-import networkx as nx
+from data_processing import new_class
 import math
 from sklearn.model_selection import KFold
 import numpy as np
 from tqdm import tqdm
+import multiprocessing
 
 N_FOLDS = 5
-NUM_PROCESS = 6
-import multiprocessing
-import os
-from multiprocessing import Process
-
-
-# init graph nodes, nodes = entities (url, words, IP, nameserver)
-# [benign, phishing]
-def check_difference(l1, l2):
-    c = 0
-    for i in range(2):
-        dif = abs(l1[i] - l2[i])
-        if dif < 0.0001 or dif < l1[i] / 100000000:
-            c += 1
-        else:
-            print(f'l1 {l1}')
-            print(f'l2 {l2}')
-            print(f'{dif}')
-    if c == 2:
-        return True
-    else:
-        return False
+NUM_PROCESS = N_FOLDS
 
 
 def init_graph_nodes(g):
@@ -46,8 +24,6 @@ def init_graph_nodes(g):
             g.nodes[node]["msg_nbr"][nbr] = [0, 0]
 
 
-# update tonode['msg_sum'] -= msg_nbr[fromnode] + new_msg
-# update tonode['msg_nbr'][fromnode] = new_msg
 def update_node_msg(fromnode, tonode, g, msg):
     temp_g = copy.deepcopy(g)
     to_entity = g.nodes[tonode]
@@ -55,42 +31,10 @@ def update_node_msg(fromnode, tonode, g, msg):
         to_entity['msg_sum'][i] = to_entity['msg_sum'][i] - to_entity['msg_nbr'][fromnode][i] + msg[i]
         to_entity['msg_nbr'][fromnode][i] = msg[i]
 
-    # check if msg_sum == sum of all msg_nbr
-    right = check_msg_sum(g, tonode)
-    if not right:
-        print("!!! WRONG NODE MSG UPDATE !!!")
-        print(f'NODE {tonode}')
-        print('before', temp_g.nodes[tonode])
-        print('after', g.nodes[tonode])
 
-
-def check_msg_sum(g, node):
-    entity = g.nodes[node]
-    nbr_sum = [0] * 2
-    for nbr in g.neighbors(node):
-        if nbr not in entity['msg_nbr']:
-            print(f'{nbr} is not nbr of {node}')
-
-    for nbr in entity['msg_nbr']:
-        for i in range(2):
-            nbr_sum[i] += entity['msg_nbr'][nbr][i]
-    return check_difference(entity['msg_sum'], nbr_sum)
-
-
-# if fromnode 0, tonode min(0, 1) to
-# 1. msg[0]  ==> log(1-0.5) + x0y0 (0.5+e) + from[msg_sum][0] - from[msg-nbr][tonode][0]
-#    to 1 ==> log(1-0.5) +x0y1 (0.5-e) + from[msg_sum][0] - from[msg-nbr][tonode][0]
-# 2. msg[1] fromnode 1, tonode
-#   to0 -> log(1-0.5) + x1y0 (0.5-e) + from[msg_sum][1] - from[msg-nbr][tonode][1]
-#   to1 -> log(1-0.5) + x1y1 (0.5+e) + from[msg_sum][1] - from[msg-nbr][tonode][1]
-# print(f'MIN SUM fromnode ------ {fromnode}')
-# print(f'{g.nodes[fromnode]["msg_sum"]}')
 def min_sum(g, fromnode, tonode):
     e = 0.001
     msg = [0] * 2
-    right = check_msg_sum(g, fromnode)
-    if not right:
-        print(f'!!!!!!!!!!!!!!!!WRONG msg sum of from node!!!!!!!!!!!!!!!!')
 
     for i in range(2):
         msg_benign = 0
@@ -115,13 +59,7 @@ def min_sum(g, fromnode, tonode):
     return msg
 
 
-# should have label ==> train set
-# all hidden urls: prior of the url has label l == 0.5 
-# phi edge potential (x has label l, y has label l'): 1. Polonium (0.5 +/- 0.001) 2. improved compatibility matrix(similarity) (min/max(ths, sim(x, y)))
-# phi edge potential joint-probability (nbr x,y relation based on labels)
 
-
-# # known label {0:[1,0], 1:[0,1]}
 def send_msg_from_node_with_label(g, fromnode, tonode):
     msg = []
     from_label = g.nodes[fromnode]['label']
@@ -136,34 +74,18 @@ def send_msg_from_node_with_label(g, fromnode, tonode):
 
 
 def send_msg_from_node_no_label(g, fromnode, tonode):
-    # min-sum algorithm ==> prior probability=="label", joint probability x&y==edge potential, sum of nbr msgs
     msg = min_sum(g, fromnode, tonode)
     update_node_msg(fromnode, tonode, g, msg)
 
 
-def fun_dif(l):
-    n = len(l)
-    k = 0
-    for i in range(n - 1):
-        dic1 = l[i]
-        dic2 = l[i + 1]
-        for key in dic1:
-            old = dic1[key]
-            new = dic2[key]
-            if new > old:
-                k += 1
-    print("difference increasing", k)
-
-
 def read_file(graph, filename):
-    # graph = input("Please enter graph filename: ")
     with open(graph, 'rb') as f:
         G = pickle.load(f)
     print("Nodes:", G.number_of_nodes(), ", Edges:", G.number_of_edges())
     print()
 
     file = filename
-    urls = load_data(file)
+    urls = new_class.load_data(file)
     data = []
     for key in urls.keys():
         data.append(key)
@@ -186,58 +108,6 @@ def init_train_nodes(graph, training_set, urls):
     # print(f"Train benign : malicious = {train_b} : {train_m}")
 
 
-def check_sum_equal_nbs(graph):
-    for node in graph.nodes():
-        if graph.nodes[node]['label'] == 0.5:
-            # print(node, "=====", G.nodes[node])
-            sums = [0] * 2
-            for nbr in graph.nodes[node]['msg_nbr']:
-                m = graph.nodes[node]['msg_nbr'][nbr]
-                # n = G.nodes[nbr]['msg_sum']
-                # if m != n:
-                #     print(f'{nbr} personal msg != nbr stored msg')
-                for i in range(2):
-                    sums[i] += m[i]
-            msg_sum_stored = graph.nodes[node]['msg_sum']
-            same = check_difference(msg_sum_stored, sums)
-            if not same:
-                # if  msg_sum_stored != sum:
-                #     print("----------- ----------- ----------- sum of msg_nbr equal to msg_sum")
-                # else:
-                print(f"----------- ----------- -----------{node} WRONG msg sum")
-                print(f'stored {msg_sum_stored}')
-                print(f'cal {sum}')
-                print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-
-
-def check_converge(temp, g):
-    num_total = 0
-    num_diff = 0
-    differ = {}
-    for node in g.nodes():
-        if g.nodes[node]['label'] == 0.5:
-            num_total += 1
-            new_msg = g.nodes[node]['msg_sum']
-            old_msg = temp.nodes[node]['msg_sum']
-            k = 0
-            for i in range(2):
-                d = abs(new_msg[i] - old_msg[i])
-                differ.update({node: d})
-                if d < 0.0001:
-                    k += 1
-            if k == 2:
-                num_diff += 1
-
-    # print('--------------------------------------------------')
-    # print(f'total hidden nodes: {num_total}')
-    # print(f'nodes without update: {num_diff}')
-    # print('--------------------------------------------------')
-    if num_diff == num_total:
-        print(f'Msg not change')
-        return True
-    return False
-
-
 def predict_label(graph, training_set):
     for node in graph.nodes:
         if node not in training_set:
@@ -248,9 +118,7 @@ def predict_label(graph, training_set):
                 cost[i] += prior_with_label + msg_sum
             graph.nodes[node]['cost'] = cost
 
-        # assign predict label (equal to less cost label)
     for node in graph.nodes:
-        label = graph.nodes[node]['label']
         cost_benign = graph.nodes[node]['cost'][0]
         cost_phish = graph.nodes[node]['cost'][1]
         if cost_benign < cost_phish:
@@ -261,7 +129,6 @@ def predict_label(graph, training_set):
 
 
 def cal_accuracy(graph, training_set, test_set, urls):
-    # check train, test accuracy
     train_right = 0
     train_wrong = 0
     test_right = 0
@@ -278,11 +145,7 @@ def cal_accuracy(graph, training_set, test_set, urls):
                 test_right += 1
             else:
                 test_wrong += 1
-    train_accuracy = (train_right / (train_right + train_wrong)) * 100
-    test_accuracy = (test_right / (test_right + test_wrong)) * 100
-    # print('Accuracy: train =', "{:.2f}".format(train_accuracy), "%, test = ", "{:.2f}".format(test_accuracy), '%')
 
-    # test split into benign, malicious for compare predict label and actual label
     benign_test = []
     phish_test = []
     for node in graph.nodes:
@@ -291,12 +154,7 @@ def cal_accuracy(graph, training_set, test_set, urls):
                 benign_test.append(node)
             else:
                 phish_test.append(node)
-    # print(f'TEST SET actual label b : m = {len(benign_test)} : {len(phish_test)}')
-    # #
-    # # true_postive - TP_b_b (true positive predict positive benign actual positive benign)
-    # # true_negative - TN_m_m
-    # # false_positive - FP_b_m
-    # # false_negative - FN_m_b
+
     # # calculate accuracy, precision, recall, f1
     TP_B_B = 0
     TN_M_M = 0
@@ -314,16 +172,11 @@ def cal_accuracy(graph, training_set, test_set, urls):
                     FP_B_M += 1
                 else:
                     TN_M_M += 1
-    # print(
-    #     f'True Positive : True Negative : False Positive: False Negative = {TP_B_B} : {TN_M_M} : {FP_B_M} : {FN_M_B}')
-    accuracy_b = TP_B_B / (TP_B_B + FN_M_B)
-    accuracy_m = TN_M_M / (TN_M_M + FP_B_M)
-    # print(f'Benign accuracy', "{:.4f}".format(accuracy_b), 'Phish accuracy', "{:.4f}".format(accuracy_m))
-    # print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
     accuracy_final = 0
     if len(test_set) == TP_B_B + FN_M_B + TN_M_M + FP_B_M:
         accuracy_final = (TN_M_M + TP_B_B) / len(test_set)
-        # print(f'Accuracy: {accuracy_final}')
+
     if TP_B_B + FN_M_B == 0:
         recall = 0
     else:
@@ -338,10 +191,13 @@ def cal_accuracy(graph, training_set, test_set, urls):
         f1 = 0
     else:
         f1 = 2 * (precision * recall) / (precision + recall)
-    # print(f'Recall', "{:.4f}".format(recall))
-    # print(f'Precision', "{:.4f}".format(precision))
-    # print('F1 score', "{:.4f}".format(f1))
-    # print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+    print(f'Accuracy: {accuracy_final}')
+    print(f'Recall', "{:.4f}".format(recall))
+    print(f'Precision', "{:.4f}".format(precision))
+    print('F1 score', "{:.4f}".format(f1))
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
     return accuracy_final, recall, precision, f1
 
 
@@ -350,65 +206,40 @@ def worker(args):
     training_set = data['train']
     test_set = data['test']
     init_train_nodes(G, training_set, urls)
-    # print(type(G.nodes()))
     nodes_list = [e for e in list(G.nodes()) if G.nodes[e]['label'] == 0.5]
-
-    # print(f'known nodes: {len(training_set)}, unknown: {len(nodes_list)}')
-    # send msg
-    # # node with label (label != 0.5) send msg to node without label (label = 0.5)
     iteration_num = 1
     step = True
-    text_desc = "#" + "{}".format(idx)
-    progress_bar = tqdm(total=5, desc=text_desc)
 
     while step:
-        # print(f'ITERATE {iteration_num}')
-        # check if msg_sum equal to the sum of msg_nbr
-        check_sum_equal_nbs(G)
-
-        temp = copy.deepcopy(G)  # used for converge, if difference < TH, terminate
-        # # serial code, send msg
-        s_t = time.perf_counter()
+        text_desc = "#Iterate" + "{}".format(iteration_num)
+        progress_bar = tqdm(total=len(nodes_list) + len(training_set), desc=text_desc)
         for node in training_set:
+            progress_bar.update(1)
             for nbr in G.neighbors(node):
-                # print(f"nbr {nbr}")
                 if G.nodes[nbr]["label"] == 0.5:
-                    # print(f"...... RECEIVE MSG ......")
                     send_msg_from_node_with_label(G, node, nbr)
         for node in nodes_list:
+            progress_bar.update(1)
             for nbr in G.neighbors(node):
-                # print(f"nbr {nbr}")
                 if G.nodes[nbr]["label"] == 0.5:
-                    # print(f"...... RECEIVE MSG ......")
                     send_msg_from_node_no_label(G, node, nbr)
-        e_t = time.perf_counter()
-        # print(f'Serial Total time {e_t - s_t}')
+        progress_bar.close()
 
-        converged = check_converge(temp, G)
-        if converged:
+        if iteration_num >= 5:
             step = False
-            progress_bar.update(1)
-
-            # print('Terminate since converged')
-        elif iteration_num >= 5:
-            step = False
-            progress_bar.update(1)
-
-            # print(f'TERMINATE larger than max iterations')
         else:
             iteration_num += 1
-            progress_bar.update(1)
 
-    progress_bar.close()
     G = predict_label(G, training_set)
     accuracy, recall, precision, f1 = cal_accuracy(G, training_set, test_set, urls)
-    # accuracy, recall, precision, f1 = 1,2,3,4
 
     return {'accuracy': accuracy, 'recall': recall, 'precision': precision, 'f1': f1}
 
 
-def main():
-    G, urls, data = read_file('./features/graph_1000.gpickle', './features/data_1000/urls')
+def main(args):
+    graph_file = './features/graph_' + args + '.gpickle'
+    url_file = './features/data_' + args + '/urls'
+    G, urls, data = read_file(graph_file, url_file)
     kf = KFold(n_splits=N_FOLDS, shuffle=True)
 
     precision_sum = 0
@@ -426,12 +257,13 @@ def main():
         data_pair['test'] = test_set
         print(f'Fold {i} init, train : test = {len(training_set)} : {len(test_set)}')
         data_list.append(data_pair)
-
+    print()
+    print('Passing Message ... ')
     start_time = time.perf_counter()
     with multiprocessing.Pool(processes=N_FOLDS) as pool:
         outputs = pool.map(worker, [(G, urls, d, data_list.index(d)) for d in data_list])
     end_time = time.perf_counter()
-    print(f'Total train time: {end_time - start_time}')
+    print("Total train time {:.4f}".format(end_time - start_time), 'sec')
     for o in outputs:
         precision_sum += o['precision']
         recall_sum += o['recall']
@@ -449,4 +281,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    arg = 'final'
+    main(arg)
