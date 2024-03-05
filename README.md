@@ -5,7 +5,7 @@
 > tqdm 4.64.1 
 
 ## Run Code
-* python3 prediction_lbp.py
+* python3 loopy_belief_propagation.py
 
 ## Main Purpose
 * This is a graph-based machine learning method, using Loopy Belief Propagation algorithm predict unknown URLs.
@@ -18,4 +18,4 @@
     * get_substrings.py - Update Object URL 'substrings' 
     * extract_features.py - extract features from nodes 
     * create_graph.py - create graph using networkx
-* prediction_lbp.py - train model
+* loopy_belief_propagation.py - train model
