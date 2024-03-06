@@ -57,7 +57,7 @@ class GraphNode:
             else:
                 self.graph.nodes[url]["predict_label"] = 1
             self.graph.nodes[url]['cost'] = cost
-        print('TEST URLS Same Cost', same)
+        # print('TEST URLS Same Cost', same)
 
     def assign_predicted_label_to_train_nodes(self):
         for node in self.train:
@@ -74,11 +74,11 @@ class GraphNode:
         recall = round(TP_B_B / (TP_B_B + FN_M_B) if TP_B_B + FN_M_B != 0 else float(0), 4)
         precision = round(TP_B_B / (TP_B_B + FP_B_M) if TP_B_B + FP_B_M != 0 else float(0), 4)
         f1score = round(2 * (precision * recall) / (precision + recall) if precision + recall != 0 else float(0), 4)
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        print(f'TP, TN, FP, FN = {TP_B_B}, {TN_M_M}, {FP_B_M}, {FN_M_B}')
-        print(f'Accuracy, Recall, Precision, F1 = {accuracy}, {recall}, '
-              f'{precision}, {f1score} ')
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        # print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        # print(f'TP, TN, FP, FN = {TP_B_B}, {TN_M_M}, {FP_B_M}, {FN_M_B}')
+        # print(f'Accuracy, Recall, Precision, F1 = {accuracy}, {recall}, '
+        #       f'{precision}, {f1score} ')
+        # print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         return accuracy, recall, precision, f1score
 
     def compare_hidden_nodes_predicted_label_with_actual_label(self):
@@ -101,6 +101,7 @@ class GraphNode:
                     false_negative += 1
         return true_positive, true_negative, false_positive, false_negative
 
+
 class Similarity:
     def __init__(self, graph, sim_type, file):
         self.type = sim_type
@@ -116,40 +117,39 @@ class Similarity:
     def init_edge_similarity(self):
         self.emb = self.file.get_data()
         for edge in self.graph.edges():
-            v1, v2 = self.emb[edge[0]], self.emb[edge[1]]
+            v1, v2 = self.normalize(edge[0]), self.normalize(edge[1])
             sim = self.calculate_similarity(v1, v2)
             self.min = min(sim, self.min)
             self.max = max(sim, self.max)
             self.graph.edges[edge]['sim'] = sim
 
-    def normalize_vector(self, v):
+    def normalize(self, edge):
+        v = self.emb[edge]
         norm = np.linalg.norm(v)
-        return v / norm if norm == 0 else v
+        if norm == 0:
+            return v
+        return v / norm
 
     def calculate_similarity(self, v1, v2):
-        v1 = self.normalize_vector(v1)
-        v2 = self.normalize_vector(v2)
         sim = 0
         if self.type == 'cos':
             sim = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         elif self.type == 'rbf':
+            m = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
             distance = np.linalg.norm(v1 - v2)
-            sim = np.exp(-distance ** 2 / (2 * 1 ** 2))
+            sim = np.exp((-1.0 / 2.0) * np.power(distance, 2.0))
         return sim
 
 
 class Message:
-    def __init__(self, graph):
+    def __init__(self, graph, edge_type):
         self.prev_graph = copy.deepcopy(graph)
         self.graph = graph
-        self.type = None
+        self.type = edge_type
         self.send = None
         self.receive = None
         self.ths1 = None
         self.ths2 = None
-
-    def set_send_message_type(self, t):
-        self.type = t
 
     def set_send_message_thresholds(self, t1, t2):
         self.ths1 = t1
@@ -180,7 +180,7 @@ class Message:
         for nbr in self.graph.neighbors(self.send):
             if self.graph.nodes[nbr]["label"] == 0.5:
                 self.set_receive_node_name(nbr)
-                msg, sums, edge, m = self.min_sum(label)
+                msg = self.min_sum(label)
                 self.update_receive_node_message(msg)
 
                 # prev_send_node_msg_sum = self.prev_graph.nodes[self.send]['msg_sum']
@@ -223,7 +223,7 @@ class Message:
     def calculate_edge_potential(self, i):
         e = 0.0001
         edges = [0] * 2
-        if self.type is None:
+        if self.type == 't1':
             edges[0] = 0.5 + e if i == 0 else 0.5 - e
             edges[1] = 0.5 + e if i == 1 else 0.5 - e
         elif self.type == 'sim_only':
@@ -232,8 +232,10 @@ class Message:
             edges[1] = 1 - sim if i == 1 else sim
         elif self.type == 'sim':
             sim = self.graph[self.send][self.receive]['sim']
-            # edges[0] = min(self.ths1, 1 - sim) if i == 0 else max(self.ths2, sim)
-            # edges[1] = min(self.ths1, 1 - sim) if i == 1 else max(self.ths2, sim)
+            edges[0] = min(self.ths1, 1 - sim) if i == 0 else max(self.ths2, sim)
+            edges[1] = min(self.ths1, 1 - sim) if i == 1 else max(self.ths2, sim)
+        elif self.type == 'sim_max':
+            sim = self.graph[self.send][self.receive]['sim']
             edges[0] = max(self.ths1, 1 - sim) if i == 0 else min(self.ths2, sim)
             edges[1] = max(self.ths1, 1 - sim) if i == 1 else min(self.ths2, sim)
         return [round(e, 10) for e in edges]
@@ -276,7 +278,7 @@ class File:
 
     def write_data_to_file(self):
         with open(self.name, 'wb') as f:
-            self.data = pickle.load(f)
+            pickle.dump(self.data, f)
 
 
 class Folds:
@@ -298,6 +300,29 @@ class Folds:
             test_set = set(np.array(data)[test])
             self.data.append({'train': training_set, 'test': test_set})
             print(f'Fold {i} init, train : test = {len(training_set)} : {len(test_set)}')
+
+    def print_dataset_ratio(self, urls):
+        for i, d in enumerate(self.data):
+            train_set, test_set = d['train'], d['test']
+            # train_set, test_set = self.data[-1]['train'], self.data[-1]['test']
+            train_benign, train_malicious, test_benign, test_malicious = 0, 0, 0, 0
+            for url in train_set:
+                label = urls[url]
+                if label == 0:
+                    train_benign += 1
+                else:
+                    train_malicious += 1
+            for url in test_set:
+                label = urls[url]
+                if label == 0:
+                    test_benign += 1
+                else:
+                    test_malicious += 1
+            print(f'Fold {i}')
+            print(f'Train benign : malicious = {train_benign} : {train_malicious}')
+            print(f'Test benign : malicious = {test_benign} : {test_malicious}')
+
+
 
 
 
