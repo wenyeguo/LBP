@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from fileinput import filename
 from tqdm import tqdm
-from utils import Similarity, Message, GraphNode, File, Folds
+from utils import Similarity, Message, GraphNode, File, Folds, GraphPlot
 
 N_FOLDS = 5
 
@@ -57,54 +57,61 @@ def find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix):
     store_result_dic_to_csv_file(f'graph_{suffix}_{sim_type}_{edge_prefix}_result.csv', result_dic)
 
 
-def step(edge_type, t1, t2, graph, data, idx):
+def step(edge_type, t1, t2, graph, data, urls, idx):
     status = True
     iteration_num = 0
-    training_set = data['train']
     nodes_list = [e for e in list(graph.nodes()) if graph.nodes[e]['label'] == 0.5]
-    prev_converged_nodes = -1
-    converged_nodes_num_list = []
+    converged_nodes_num_list, accuracy_list, recall_list, precision_list, f1score_list = [], [], [], [], []
+    # plot = GraphPlot(graph, data)
+
     while status:
         message = Message(graph, edge_type)
         if edge_type == 'sim':
             message.set_send_message_thresholds(t1, t2)
 
-        nodes_list = nodes_list[::-1]
-        # random.shuffle(nodes_list)
-        with (tqdm(total=len(nodes_list) + len(training_set), desc=f'Process {idx} Iteration {iteration_num}')
+        with (tqdm(total=graph.number_of_nodes(), desc=f'Process {idx} Iteration {iteration_num}')
               as progress_bar):
-            # if iteration != 1 not go this
-            for node in training_set:
+            for node in graph.nodes:
                 progress_bar.update(1)
                 message.send_message(node)
 
-            # send msg from known urls nbr to hidden node
-            for node in nodes_list:
-                progress_bar.update(1)
-                message.send_message(node)
-            progress_bar.close()
+            # display graph
+            # plot.draw_graph(iteration_num)
+            accuracy, recall, precision, f1score = message.calculate_accuracy(data['test'], urls)
+            accuracy_list.append(accuracy)
+            recall_list.append(recall)
+            precision_list.append(precision)
+            f1score_list.append(f1score)
 
             current_converged_nodes = message.check_if_graph_converged(nodes_list)
             converged_nodes_num_list.append(current_converged_nodes)
-            # print(f'Process {idx} Iteration {iteration_num}')
-            # print(f'converged node previous : current = {prev_converged_nodes} : {current_converged_nodes}')
-            prev_converged_nodes = current_converged_nodes
+            # converged = plot.check_if_converge(iteration_num)
+            # converged_nodes_num_list.append(converged)
+            # # print(f'Process {idx} Iteration {iteration_num}')
+            # # print(f'converged node previous : current = {prev_converged_nodes} : {current_converged_nodes}')
+            # prev_converged_nodes = current_converged_nodes
 
-            if current_converged_nodes == len(nodes_list):
-                status = False
-            elif iteration_num > 100:
+            # if converged_nodes_num_list == len(data['test']):
+            #     status = True
+            if iteration_num == 5:
                 status = False
             iteration_num += 1
-    print(f'Process {idx} Iteration {iteration_num}')
-    print(f'Converged nodes List: {converged_nodes_num_list}')
+    print(f'{edge_type} Process {idx} Iteration {iteration_num}')
+    print(f'converge: {converged_nodes_num_list}, accuracy: {accuracy_list}, '
+          f'precision: {precision_list}, recall: {recall_list}, f1: {f1score_list}')
+
 
 
 def worker(args):
     edge_type, t1, t2, G, urls, data, idx = args
     graph_node = GraphNode(G)
-    graph_node.init_nodes(data, urls)
+    G = graph_node.init_nodes(data, urls)
+    for node in G.nodes:
+        cost = G.nodes[node]['cost']
+        if not cost:
+            print()
 
-    step(edge_type, t1, t2, G, data, idx)
+    step(edge_type, t1, t2, G, data, urls, idx)
 
     graph_node.infer_node_labels()
     accuracy, recall, precision, f1 = graph_node.calculate_performance()
@@ -145,17 +152,20 @@ def main(t1, t2, sim_type, emb_prefix, edge_type, suffix):
 if __name__ == '__main__':
     edge_prefix = 'word2vec'
     sim_type = 'rbf'
-    suffix = '5000'
-    # s = [100, 200, 500, 1000, 5000, 10000, 20000, 24826, 'final']
+    suffix = '10'
+    # rs_t1 = main(1, 0, 'cos', edge_prefix, 't1', suffix)
+    # print('graph', suffix)
+    # print('0.5 + e', rs_t1)
+    # # s = [100, 200, 500, 1000, 5000, 10000, 20000, 24826, 'final']
     s = ['final']
     for suffix in s:
-        # rs_t1 = main(1, 0, 'cos', edge_prefix, 't1', suffix)
+        rs_t1 = main(1, 0, 'cos', edge_prefix, 't1', suffix)
         rs_cos_sim_only = main(1, 0, 'cos', edge_prefix, 'sim_only', suffix)
-        # rs_rbf_sim_only = main(1, 0, 'rbf', edge_prefix, 'sim_only', suffix)
+        rs_rbf_sim_only = main(1, 0, 'rbf', edge_prefix, 'sim_only', suffix)
         print('graph', suffix)
-        # print('0.5 + e', rs_t1)
+        print('0.5 + e', rs_t1)
         print('cos sim_only', rs_cos_sim_only)
-        # print('rbf sim_only', rs_rbf_sim_only)
+        print('rbf sim_only', rs_rbf_sim_only)
 
 
 
