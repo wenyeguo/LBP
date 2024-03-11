@@ -7,6 +7,7 @@ from utils import Similarity, Message, GraphNode, File, Folds, GraphPlot
 
 N_FOLDS = 5
 
+
 def read_data_from_files(suffix, emb_prefix):
     graph_file = File(f'./data/graphs/graph_{suffix}.pickle')
     url_file = File(f'./data/urls/url_{suffix}.pickle')
@@ -24,7 +25,8 @@ def calculate_average_performance(outputs):
         precision_sum += o['precision']
         recall_sum += o['recall']
         f1score_sum += o['f1']
-    accuracy, precision, recall, f1 = round(accuracy_sum / N_FOLDS, 4), round(precision_sum / N_FOLDS,4), round(recall_sum / N_FOLDS, 4), round(f1score_sum / N_FOLDS, 4)
+    accuracy, precision, recall, f1 = round(accuracy_sum / N_FOLDS, 4), round(precision_sum / N_FOLDS, 4), round(
+        recall_sum / N_FOLDS, 4), round(f1score_sum / N_FOLDS, 4)
 
     print("Done.")
     print(f'Averaged accuracy, precision, recall, F1 : '
@@ -45,16 +47,30 @@ def store_result_dic_to_csv_file(filename, data):
 def find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix):
     # # t1 = [1.0, 1.1, 1.2, 1.3, 1.4]
     # # t2 = [0.0, -0.1, -0.2, -0.3, -0.4]
+    # similarity range: [0.2532560527295608, 1.0]
+    edge_type = 'sim'
+    # TODO change edge type
     t1 = [n / 10 for n in range(11)]
     t2 = [n / 10 for n in range(11)]
     result_dic = {}
     for i in t1:
         for j in t2:
             threshold1, threshold2 = i, j
-            rs = main(threshold1, threshold2, sim_type, edge_prefix, 'sim_max', suffix)
+            rs = main(threshold1, threshold2, sim_type, edge_prefix, edge_type, suffix)
             key = f'{threshold1}:{threshold2}'
             result_dic[key] = rs
-    store_result_dic_to_csv_file(f'graph_{suffix}_{sim_type}_{edge_prefix}_result.csv', result_dic)
+    store_result_dic_to_csv_file(f'graph_{suffix}_{sim_type}_{edge_prefix}_result_{edge_type}.csv', result_dic)
+
+
+def check_different_edge_potential_performance(edge_prefix, sim_type, suffix):
+    threshold1, threshold2 = 0, 0
+    rs_t1 = main(threshold1, threshold2, sim_type, edge_prefix, 't1', suffix)
+    rs_cos_sim_only = main(threshold1, threshold2, 'cos', edge_prefix, 'sim_only', suffix)
+    rs_rbf_sim_only = main(threshold1, threshold2, 'rbf', edge_prefix, 'sim_only', suffix)
+    print('graph', suffix)
+    print('0.5 + e', rs_t1)
+    print('cos sim_only', rs_cos_sim_only)
+    print('rbf sim_only', rs_rbf_sim_only)
 
 
 def step(edge_type, t1, t2, graph, data, urls, idx):
@@ -66,7 +82,7 @@ def step(edge_type, t1, t2, graph, data, urls, idx):
 
     while status:
         message = Message(graph, edge_type)
-        if edge_type == 'sim':
+        if edge_type == 'sim' or edge_type == 'sim_max':
             message.set_send_message_thresholds(t1, t2)
 
         with (tqdm(total=graph.number_of_nodes(), desc=f'Process {idx} Iteration {iteration_num}')
@@ -99,7 +115,6 @@ def step(edge_type, t1, t2, graph, data, urls, idx):
     print(f'{edge_type} Process {idx} Iteration {iteration_num}')
     print(f'converge: {converged_nodes_num_list}, accuracy: {accuracy_list}, '
           f'precision: {precision_list}, recall: {recall_list}, f1: {f1score_list}')
-
 
 
 def worker(args):
@@ -152,21 +167,7 @@ def main(t1, t2, sim_type, emb_prefix, edge_type, suffix):
 if __name__ == '__main__':
     edge_prefix = 'word2vec'
     sim_type = 'rbf'
-    suffix = '10'
-    # rs_t1 = main(1, 0, 'cos', edge_prefix, 't1', suffix)
-    # print('graph', suffix)
-    # print('0.5 + e', rs_t1)
-    # # s = [100, 200, 500, 1000, 5000, 10000, 20000, 24826, 'final']
-    s = ['final']
-    for suffix in s:
-        rs_t1 = main(1, 0, 'cos', edge_prefix, 't1', suffix)
-        rs_cos_sim_only = main(1, 0, 'cos', edge_prefix, 'sim_only', suffix)
-        rs_rbf_sim_only = main(1, 0, 'rbf', edge_prefix, 'sim_only', suffix)
-        print('graph', suffix)
-        print('0.5 + e', rs_t1)
-        print('cos sim_only', rs_cos_sim_only)
-        print('rbf sim_only', rs_rbf_sim_only)
+    suffix = 'final'
 
-
-
-
+    find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix)
+    # check_different_edge_potential_performance(edge_prefix, sim_type, suffix)
