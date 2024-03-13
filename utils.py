@@ -159,7 +159,7 @@ class GraphNode:
         self.url_labels = urls
         self.init_all_graph_nodes()
         self.init_train_node()
-        # self.init_test_node_cost()
+        self.init_test_node_cost()
         # for node in self.graph.nodes:
         #     cost = self.graph.nodes[node]['cost']
         return self.graph
@@ -184,42 +184,27 @@ class GraphNode:
                 self.graph.nodes[node]['cost'] = [0.01, 0.99]
             else:
                 raise NameError('wrong label detected')
+
     def init_test_node_cost(self):
-        with open('./basic_models/features/benign_probability.pickle', 'rb') as f:
+        with open('./baseline/benign_probability.pickle', 'rb') as f:
             benign_probability = pickle.load(f)
         for node in self.test:
             proba = benign_probability[node]
             self.graph.nodes[node]['cost'] = [proba, round(1 - proba, 4)]
         # for node in self.graph.nodes:
         #     cost = self.graph.nodes[node]['cost']
-    def infer_node_labels(self):
-        self.assign_predicted_label_to_hidden_nodes()
-        self.assign_predicted_label_to_train_nodes()
 
-    def assign_predicted_label_to_hidden_nodes(self):
-        same = 0
+    def assign_predicted_label_to_test_urls(self):
         for url in self.test:
-            prior_probability = math.log(1 - self.graph.nodes[url]["label"])
-            cost = [prior_probability + msg for msg in self.graph.nodes[url]['msg_sum']]
-            if cost[0] == cost[1]:
-                same += 1
-            if cost[0] < cost[1]:
+            cost_benign = self.graph.nodes[url]['cost'][0] + self.graph.nodes[url]['msg_sum'][0]
+            cost_phish = self.graph.nodes[url]['cost'][1] + self.graph.nodes[url]['msg_sum'][1]
+            if cost_benign < cost_phish:
                 self.graph.nodes[url]["predict_label"] = 0
             else:
                 self.graph.nodes[url]["predict_label"] = 1
-            self.graph.nodes[url]['cost'] = cost
-        # print('TEST URLS Same Cost', same)
-
-    def assign_predicted_label_to_train_nodes(self):
-        for node in self.train:
-            cost_benign = self.graph.nodes[node]['cost'][0]
-            cost_phish = self.graph.nodes[node]['cost'][1]
-            if cost_benign < cost_phish:
-                self.graph.nodes[node]["predict_label"] = 0
-            else:
-                self.graph.nodes[node]["predict_label"] = 1
 
     def calculate_performance(self):
+        self.assign_predicted_label_to_test_urls()
         TP_B_B, TN_M_M, FP_B_M, FN_M_B = self.compare_hidden_nodes_predicted_label_with_actual_label()
         accuracy = round((TN_M_M + TP_B_B) / len(self.test) if len(self.test) != 0 else float(0), 4)
         recall = round(TP_B_B / (TP_B_B + FN_M_B) if TP_B_B + FN_M_B != 0 else float(0), 4)
@@ -233,7 +218,7 @@ class GraphNode:
         return accuracy, recall, precision, f1score
 
     def compare_hidden_nodes_predicted_label_with_actual_label(self):
-        train_right, train_wrong, test_right, test_wrong = 0, 0, 0, 0
+        test_right, test_wrong = 0, 0
         true_positive, true_negative, false_positive, false_negative = 0, 0, 0, 0
         for url in self.test:
             actual_label = self.url_labels[url]
@@ -381,6 +366,7 @@ class Message:
         else:
             edges = [0.5 - e, 0.5 + e]
         return edges
+
     def edge_potential_similarity_only(self, assumeLabel, sim):
         if assumeLabel == 0:
             edges = [1 - sim, sim]
@@ -429,7 +415,7 @@ class Message:
         accuracy = round((true_negative + true_positive) / len(testSet) if len(testSet) != 0 else float(0), 4)
         recall = round(true_positive / (true_positive + false_negative)
                        if true_positive + false_negative != 0 else 0.0, 4)
-        precision = round(true_positive / (false_positive + false_positive)
+        precision = round(true_positive / (false_positive + true_positive)
                           if true_positive + false_positive != 0 else 0.0, 4)
         f1score = round(2 * (precision * recall) / (precision + recall) if precision + recall != 0 else float(0), 4)
         return accuracy, recall, precision, f1score

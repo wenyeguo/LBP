@@ -124,11 +124,10 @@ def worker(args):
     for node in G.nodes:
         cost = G.nodes[node]['cost']
         if not cost:
-            print()
+            print('Wrong Cost')
 
     step(edge_type, t1, t2, G, data, urls, idx)
 
-    graph_node.infer_node_labels()
     accuracy, recall, precision, f1 = graph_node.calculate_performance()
     return {'accuracy': accuracy, 'recall': recall, 'precision': precision, 'f1': f1}
 
