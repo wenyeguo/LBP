@@ -64,12 +64,12 @@ def find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix):
 
 def check_different_edge_potential_performance(edge_prefix, sim_type, suffix):
     threshold1, threshold2 = 0, 0
-    rs_t1 = main(threshold1, threshold2, sim_type, edge_prefix, 't1', suffix)
-    rs_cos_sim_only = main(threshold1, threshold2, 'cos', edge_prefix, 'sim_only', suffix)
+    # rs_t1 = main(threshold1, threshold2, sim_type, edge_prefix, 't1', suffix)
+    # rs_cos_sim_only = main(threshold1, threshold2, 'cos', edge_prefix, 'sim_only', suffix)
     rs_rbf_sim_only = main(threshold1, threshold2, 'rbf', edge_prefix, 'sim_only', suffix)
     print('graph', suffix)
-    print('0.5 + e', rs_t1)
-    print('cos sim_only', rs_cos_sim_only)
+    # print('0.5 + e', rs_t1)
+    # print('cos sim_only', rs_cos_sim_only)
     print('rbf sim_only', rs_rbf_sim_only)
 
 
@@ -78,7 +78,7 @@ def step(edge_type, t1, t2, graph, data, urls, idx):
     iteration_num = 0
     nodes_list = [e for e in list(graph.nodes()) if graph.nodes[e]['label'] == 0.5]
     converged_nodes_num_list, accuracy_list, recall_list, precision_list, f1score_list = [], [], [], [], []
-    # plot = GraphPlot(graph, data)
+    plot = GraphPlot(graph, data)
 
     while status:
         message = Message(graph, edge_type)
@@ -90,6 +90,8 @@ def step(edge_type, t1, t2, graph, data, urls, idx):
             for node in graph.nodes:
                 progress_bar.update(1)
                 message.send_message(node)
+
+            message.update_nodes_message()
 
             # display graph
             # plot.draw_graph(iteration_num)
@@ -109,7 +111,7 @@ def step(edge_type, t1, t2, graph, data, urls, idx):
 
             # if converged_nodes_num_list == len(data['test']):
             #     status = True
-            if iteration_num == 5:
+            if iteration_num == 100:
                 status = False
             iteration_num += 1
     print(f'{edge_type} Process {idx} Iteration {iteration_num}')
@@ -147,18 +149,18 @@ def main(t1, t2, sim_type, emb_prefix, edge_type, suffix):
     kf.print_dataset_ratio(url_labels)
     data_list = kf.get_data()
 
-    # worker([edge_type, t1, t2, G, url_labels, data_list[0], 0])
-    print()
-    print('Passing Message ... ')
-    start_time = time.perf_counter()
-    with multiprocessing.Pool(processes=N_FOLDS) as pool:
-        try:
-            outputs = pool.map(worker, [(edge_type, t1, t2, G, url_labels, d, data_list.index(d)) for d in data_list])
-        finally:
-            pool.close()
-            pool.join()
-    end_time = time.perf_counter()
-    print("Total train time {:.4f}".format(end_time - start_time), 'sec')
+    worker([edge_type, t1, t2, G, url_labels, data_list[0], 0])
+    # print()
+    # print('Passing Message ... ')
+    # start_time = time.perf_counter()
+    # with multiprocessing.Pool(processes=N_FOLDS) as pool:
+    #     try:
+    #         outputs = pool.map(worker, [(edge_type, t1, t2, G, url_labels, d, data_list.index(d)) for d in data_list])
+    #     finally:
+    #         pool.close()
+    #         pool.join()
+    # end_time = time.perf_counter()
+    # print("Total train time {:.4f}".format(end_time - start_time), 'sec')
 
     return calculate_average_performance(outputs)
 
@@ -168,5 +170,5 @@ if __name__ == '__main__':
     sim_type = 'rbf'
     suffix = 'final'
 
-    find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix)
-    # check_different_edge_potential_performance(edge_prefix, sim_type, suffix)
+    # find_suitable_similarity_thresholds(edge_prefix, sim_type, suffix)
+    check_different_edge_potential_performance(edge_prefix, sim_type, suffix)
