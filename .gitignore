@@ -1,0 +1,9 @@
+/data/graphs/graph_10_withOneCycle.pickle
+.idea/
+*.DS_Store
+*/__pycache__/*
+/data/graphs/graph_200.pickle
+/data/graphs/graph_10.pickle
+/data/urls/url_10.pickle
+/data/urls/url_200.pickle
+/data/urls/urls_10.pickle
