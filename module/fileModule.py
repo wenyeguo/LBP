@@ -23,9 +23,8 @@ class File:
         with open(self.name, 'wb+') as f:
             pickle.dump(self.data, f)
 
-
-    def store_data_into_csvFile(self, file, rowName, data):
-        with (open(f'file', 'w', newline='') as csv_file):
+    def store_data_into_csvFile(self, rowName, data):
+        with (open(self.name, 'w', newline='') as csv_file):
             writer = csv.writer(csv_file)
             writer.writerow(rowName)
             for key, value in data.items():

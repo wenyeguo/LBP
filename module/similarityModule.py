@@ -1,6 +1,7 @@
 from math import inf
 import numpy as np
 
+
 class Similarity:
     def __init__(self, graph, sim_type, file):
         self.type = sim_type
@@ -42,4 +43,3 @@ class Similarity:
             distance = np.linalg.norm(v1 - v2)
             sim = np.exp((-1.0 / 2.0) * np.power(distance, 2.0))
         return sim
-
