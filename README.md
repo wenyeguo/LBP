@@ -7,9 +7,11 @@
 ## Run Code
 * python3 lbp.py 
 * python3 lbp.py DATA_SUFFIX EMBEDDING_PREFIX TYPE_SIMILARITY TYPE_EDGE_POTENTIAL DELETE_CYCLE
-* (eg: python3 lbp.py 100 word2vec rbf sim_only True)
+    eg: python3 lbp.py 100 word2vec rbf sim_only True
 * python3 lbp.py DATA_SUFFIX EMBEDDING_PREFIX TYPE_SIMILARITY TYPE_EDGE_POTENTIAL DELETE_CYCLE SIMILARITY_THRESHOLD1 SIMILARITY_THRESHOLD2
-* (eg: python3 lbp.py 100 word2vec rbf sim True 0.1 0.2)
+    eg: python3 lbp.py 100 word2vec rbf sim True 0.1 0.2
+
+## Parameters
 * DATA_SUFFIX = ["final", '100', '5000']
 * EMBEDDING_PREFIX = ["word2vec", "doc2vec", 'deepwalk', '' ]
 * TYPE_SIMILARITY = ['rbf', 'cos']
@@ -30,4 +32,4 @@
     * get_substrings.py - Update Object URL 'substrings' 
     * extract_features.py - extract features from nodes 
     * create_graph.py - create graph using networkx
-* loopy_belief_propagation.py - train model
+* lbp.py - train model
