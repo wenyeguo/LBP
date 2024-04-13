@@ -1,6 +1,6 @@
 import copy
 import networkx as nx
-
+from module.predictModule import assign_node_predict_label
 
 class Message:
     def __init__(self, graph, edge_type, similarity):
@@ -13,12 +13,17 @@ class Message:
         self.ths2 = None
         self.nodesMsgDic = {}
         self.similarity = similarity
+        self.receive_node_information = None
         self.init_nodes_message_dictionary()
+        self.messageType = None
 
     def set_thresholds(self, t1, t2):
         if self.edgePotentialType == 'sim' or self.edgePotentialType == 'sim_max':
             self.ths1 = t1
             self.ths2 = t2
+
+    def set_message_type(self, msgType):
+        self.messageType = msgType
 
     def set_send_node_name(self, sender):
         self.sender = sender
@@ -46,10 +51,27 @@ class Message:
 
     def receive_message(self, receiver):
         self.set_receive_node_name(receiver)
+        self.init_receive_node_info()
         for node in self.graph.neighbors(receiver):
             self.set_send_node_name(node)
-            msg = self.min_sum('cycle')
-            self.update_nodes_message_dictionary(msg)
+            msg = self.min_sum()
+            self.update_receiver_node_info(msg)
+        return {self.receiver: self.receive_node_information}
+
+    def init_receive_node_info(self):
+        msg_sum_copy = self.graph.nodes[self.receiver]['msg_sum'].copy()
+        self.receive_node_information = {'msg_sum': msg_sum_copy, 'msg_nbr': {}}
+        for nbr in self.graph.nodes[self.receiver]['msg_nbr']:
+            msg_nbr_copy = self.graph.nodes[self.receiver]['msg_nbr'][nbr].copy()
+            self.receive_node_information['msg_nbr'][nbr] = msg_nbr_copy
+    def update_receiver_node_info(self, msg):
+        for i in range(2):
+            self.receive_node_information['msg_sum'][i] = (
+                round(self.receive_node_information['msg_sum'][i]
+                      + (-self.receive_node_information['msg_nbr'][self.sender][i])
+                      + msg[i],
+                      10))
+            self.receive_node_information['msg_nbr'][self.sender][i] = round(msg[i], 10)
 
     def send_message(self, sender):
         self.set_send_node_name(sender)
@@ -57,6 +79,7 @@ class Message:
             if self.graph.nodes[nbr]["label"] == 0.5:
                 self.set_receive_node_name(nbr)
                 msg = self.min_sum('normal')
+
                 self.update_nodes_message_dictionary(msg)
 
     def send_message_to_cycle_neighbors(self):
@@ -89,19 +112,20 @@ class Message:
                 receive_node['msg_sum'][i] + (-receive_node['msg_nbr'][self.sender][i]) + msg[i], 10)
             receive_node['msg_nbr'][self.sender][i] = round(msg[i], 10)
 
-    def update_graph_nodes_message(self):
-        for node in self.nodesMsgDic:
-            updated_msg_sum_copy = self.nodesMsgDic[node]['msg_sum'].copy()
-            self.graph.nodes[node]['msg_sum'] = updated_msg_sum_copy
-            for nbr in self.nodesMsgDic[node]['msg_nbr']:
-                updated_msg_nbr_copy = self.nodesMsgDic[node]['msg_nbr'][nbr].copy()
-                self.graph.nodes[node]['msg_nbr'][nbr] = updated_msg_nbr_copy
+    def update_graph_nodes_message(self, nodesMsgDic):
+        for nodeItem in nodesMsgDic:
+            for node, nodeInfo in nodeItem.items():
+                updated_msg_sum_copy = nodeInfo['msg_sum'].copy()
+                self.graph.nodes[node]['msg_sum'] = updated_msg_sum_copy
+                for nbr in nodeInfo['msg_nbr']:
+                    updated_msg_nbr_copy = nodeInfo['msg_nbr'][nbr].copy()
+                    self.graph.nodes[node]['msg_nbr'][nbr] = updated_msg_nbr_copy
 
-    def min_sum(self, messageType):
+    def min_sum(self):
         send_prior_benign = self.graph.nodes[self.sender]['prior_probability'][0]
         send_prior_malicious = self.graph.nodes[self.sender]['prior_probability'][1]
         msg = [0] * 2
-        sumOfSendNode = self.sums_of_neighbors(messageType)
+        sumOfSendNode = self.sums_of_neighbors()
 
         for assumeLabel in range(2):
             edges = self.calculate_edge_potential(assumeLabel)
@@ -110,9 +134,9 @@ class Message:
             msg[assumeLabel] = min(msg_benign, msg_phishing)
         return msg
 
-    def sums_of_neighbors(self, messageType):
+    def sums_of_neighbors(self):
         sumOfSendNode = [0, 0]
-        if messageType == 'normal':
+        if self.messageType == 'normal':
             if self.graph.nodes[self.sender]['label'] == 0.5:
                 sumOfSendNode = self.sums_except_receive_node()
         else:
@@ -133,11 +157,11 @@ class Message:
         else:
             edgeTuple = tuple(sorted([self.sender, self.receiver]))
             similarity = self.similarity[edgeTuple]
-            edges = self.switch_edge_potential_type(assumeLabel, similarity)
+            edges = self.calculate_edge_potentials_with_specific_type(assumeLabel, similarity)
         edges = [round(e, 10) for e in edges]
         return edges
 
-    def switch_edge_potential_type(self, assumeLabel, similarity):
+    def calculate_edge_potentials_with_specific_type(self, assumeLabel, similarity):
         edges = [0.0] * 2
         if self.edgePotentialType == 'sim_only':
             edges = self.edge_potential_similarity_only(assumeLabel, similarity)
@@ -181,7 +205,7 @@ class Message:
     # assign label to nodes which has known neighbor
     # TODO assign node label if it receive msg from more than half neighbors
     # if node has knownlabel, predict hiddenNodes label
-    def assignNodeLabels(self, hiddenNodes):
+    def assignNodeLabels(self, hiddenNodes, classify_threshold):
         connected_components = list(nx.connected_components(self.graph))
         for nodes in connected_components:
             status = False
@@ -192,19 +216,16 @@ class Message:
             if status:
                 for node in nodes:
                     if node in hiddenNodes:
-                        if self.receivedFromMajorityNeighbors(node, -1):
-                            self.predict_nodeLabel(node)
-
-    # predict node label
-    def predict_nodeLabel(self, node):
-        cost_benign = 1 - self.graph.nodes[node]['prior_probability'][0] + self.graph.nodes[node]['msg_sum'][0]
-        cost_phish = 1 - self.graph.nodes[node]['prior_probability'][1] + self.graph.nodes[node]['msg_sum'][1]
-        if cost_benign < cost_phish:
-            self.graph.nodes[node]["predict_label"] = 0
-            self.graph.nodes[node]['prior_probability'] = [1, 0]
-        else:
-            self.graph.nodes[node]["predict_label"] = 1
-            self.graph.nodes[node]['prior_probability'] = [0, 1]
+                        predict_label = assign_node_predict_label(self.graph.nodes[node], classify_threshold)
+                        self.graph.nodes[node]['predict_label'] = predict_label
+                        if predict_label == 0:
+                            self.graph.nodes[node]['prior_probability'] = [1, 0]
+                        else:
+                            self.graph.nodes[node]['prior_probability'] = [0, 1]
+                        # if self.receivedFromMajorityNeighbors(node, -1):
+                        #     self.predict_nodeLabel(node)
+            # else:
+            #     print()
 
     def convergedNodes(self, nodes):
         converged_nodes = 0
