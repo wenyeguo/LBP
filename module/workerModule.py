@@ -1,3 +1,5 @@
+import multiprocessing
+
 from module.graphNodeModule import GraphNode
 from module.messageModule import Message
 from module.metricModule import Metric
@@ -14,20 +16,27 @@ class Worker:
         self.threshold1 = None
         self.threshold2 = None
         self.edgePotentialType = None
+        self.classify_threshold = None
+        self.add_test_probability = None
 
     def run(self, args):
-        (self.edgePotentialType, self.threshold1, self.threshold2, self.graph, self.urls, self.similarity,
+        (self.add_test_probability, self.edgePotentialType, self.classify_threshold, self.threshold1, self.threshold2,
+         self.graph, self.urls, self.similarity,
          self.data, self.processId) = args
         if self.workerType == 'cycle':
             self.worker_cycle()
         elif self.workerType == 'normal':
             self.worker_normal()
         metrics = Metric(self.graph, self.data, self.urls)
-        return metrics.get_metrics()
+        return metrics.get_ROC_data()
 
     def worker_normal(self):
         graph_node = GraphNode(self.graph)
+        graph_node.set_classify_threshold(self.classify_threshold)
         graph_node.init_nodes(self.data, self.urls)
+        if self.add_test_probability:
+            graph_node.add_test_node_probability()
+
         times = 6
         self.messagePassing('normal', times)
 
@@ -35,9 +44,10 @@ class Worker:
         # 1. delete cycles, passing message, predict labels
         # init graph nodes, add metadata (label, predict_label ...)
         graph_node = GraphNode(self.graph)
+        graph_node.set_classify_threshold(self.classify_threshold)
         graph_node.init_nodes(self.data, self.urls)
-        # add baseline probability
-        graph_node.init_test_node_probability()
+        if self.add_test_probability:
+            graph_node.add_test_node_probability()
 
         self.graph = graph_node.remove_cycles()
         self.messagePassing('normal', -1)
@@ -45,11 +55,9 @@ class Worker:
         withoutPredictionNodesNums = self.withoutPredictionNodes()
         print(f'Process {self.processId}, after remove all cycles, not predicted nodes', withoutPredictionNodesNums)
         #
-        self.add_cycle_to_worker(graph_node)
-
-        # # nodes without predictions (nodes lacking connections with known nodes)
-        self.print_convergence_result()
-        #
+        add_all_cycles_back = self.add_cycle_to_worker(graph_node)
+        if not add_all_cycles_back:
+            self.print_convergence_result()
         graph_node.assign_predicted_label()
 
     def print_convergence_result(self):
@@ -85,11 +93,23 @@ class Worker:
             prevEdges = self.graph.number_of_edges()
             graph_node.add_deleted_cycles()
             currentEdges = self.graph.number_of_edges()
+            print('----------------------------------------------------------------')
+            print(f'Process {self.processId}, add {currentEdges - prevEdges} edges')
+            print('----------------------------------------------------------------')
+
             if currentEdges > prevEdges:
                 self.messagePassing('cycle', -1)
             else:
+                print('----------------------------------------------------------------')
                 print(f'Process {self.processId} stop adding cycles, since no known cycle exists')
-                break
+                print('----------------------------------------------------------------')
+
+                return False
+        print('----------------------------------------------------------------')
+        print(f'Process {self.processId}, Added All Edges Back, Current Edges {self.graph.number_of_edges()}')
+        print('----------------------------------------------------------------')
+
+        return True
 
     def unknown_url(self):
         count = 0
@@ -109,25 +129,20 @@ class Worker:
 
             message = Message(self.graph, self.edgePotentialType, self.similarity)
             message.set_thresholds(self.threshold1, self.threshold2)
+            message.set_message_type(passType)
             # TODO all change receive message, only hidden nodes receive msg
-            if passType == 'normal':
-                for node in self.graph.nodes:
-                    message.send_message(node)
-            else:
-                for node in unknownNodes:
-                    message.receive_message(node)
-
-            message.update_graph_nodes_message()
+            outputs = [message.receive_message(node) for node in unknownNodes]
+            message.update_graph_nodes_message(outputs)
             current_converged_nodes = message.count_converged_nodes(unknownNodes)
 
             print(f'Process {self.processId} Iteration {iterations}: '
                   f'total hidden nodes {len(unknownNodes)}, converged nodes {current_converged_nodes}')
 
             if current_converged_nodes == len(unknownNodes):
-                message.assignNodeLabels(unknownNodes)
+                message.assignNodeLabels(unknownNodes, self.classify_threshold)
                 break
             elif iterationTimes != -1 and iterations == iterationTimes:
-                message.assignNodeLabels(unknownNodes)
+                message.assignNodeLabels(unknownNodes, self.classify_threshold)
                 break
 
             iterations += 1
