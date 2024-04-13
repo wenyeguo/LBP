@@ -1,68 +1,57 @@
-import csv
+import pandas as pd
 from features import Feature, normalization, read_data_from_csvFile
 
 
-def store_features_into_csvFile(csv_file_path, data):
-    with open(csv_file_path, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            ['URL', 'Label', "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",
-             "s", "t", "u",
-             "v", "w", "x", "y", "z", 'ratio_of_domain', 'num_of_punctuation', 'num_of_specific_symbols',
-             'domain_contain_address', 'num_of_suspiciousWords', 'euclidean_distance', 'divergence_KL', 'distance_KS'])
-        for url, features in data.items():
-            row = [url]
-            for feature in features:
-                row.append(feature)
-            row = [str(value) for value in row]
-            writer.writerows([row])
+def main():
+    urls_file = "./data/new_benign_phishing_urls.csv"
+    df = pd.read_csv(urls_file)
+    num_rows, num_columns = df.shape
+
+    # Sample URLs for demonstration (replace with your DataFrame)
+    size = num_rows
+    df_sample = df.sample(n=size, random_state=42)
+    features = []
+    # Iterate over each URL in the sampled DataFrame
+    for index, row in df_sample.iterrows():
+        url = row['url']
+        url_type = row['type']
+        url_label = row['label']
+        f = Feature(url)
+        normalized_char_frequency = f.get_character_frequency()
+        ratio_of_domain = f.get_domainLengthRatio()
+        num_of_punctuation = f.get_punctuations()
+        num_of_specific_symbols = f.get_specificSymbols()
+        domain_contain_address = f.get_isIPAddress()
+        num_of_suspiciousWords = f.get_suspiciousWordsCounts()
+        euclidean_distance = f.get_Euclidean_Distance()
+        divergence_KL = f.get_KullbackLeiblerDivergence()
+        distance_KS = f.get_KolmogorovSmirnovDistance()
+        features.append([
+            url,
+            url_type,
+            url_label,
+            *[freq for freq in normalized_char_frequency],
+            ratio_of_domain,
+            num_of_punctuation,
+            num_of_specific_symbols,
+            domain_contain_address,
+            num_of_suspiciousWords,
+            euclidean_distance,
+            divergence_KL,
+            distance_KS
+        ])
+    columns = ['url', 'type', 'Label', "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p",
+               "q", "r", "s", "t", "u",
+               "v", "w", "x", "y", "z", 'ratio_of_domain', 'num_of_punctuation', 'num_of_specific_symbols',
+               'domain_contain_address', 'num_of_suspiciousWords', 'euclidean_distance', 'divergence_KL', 'distance_KS']
+    features_df = pd.DataFrame(features, columns=columns)
+
+    # Save the features DataFrame to a file (e.g., CSV)
+    features_df.to_csv(f"./features/new_dataset_features_default.csv", index=False, mode='w')
+
+    # Display the features DataFrame
+    print(features_df.head())
 
 
-url_label_dic = read_data_from_csvFile('./data/data.csv')
-
-fList0, urls = [], []
-fList1, fList2, fList3, fList4, fList5, fList6, fList7, fList8 = [], [], [], [], [], [], [], []
-for url, label in url_label_dic.items():
-    urls.append(url)
-    f = Feature(url)
-    normalized_char_frequency = f.get_character_frequency()
-    fList0.append(normalized_char_frequency)
-    ratio_of_domain = f.get_domainLengthRatio()
-    fList1.append(ratio_of_domain)
-    num_of_punctuation = f.get_punctuations()
-    fList2.append(num_of_punctuation)
-    num_of_specific_symbols = f.get_specificSymbols()
-    fList3.append(num_of_specific_symbols)
-    domain_contain_address = f.get_isIPAddress()
-    fList4.append(domain_contain_address)
-    num_of_suspiciousWords = f.get_suspiciousWordsCounts()
-    fList5.append(num_of_suspiciousWords)
-    euclidean_distance = f.get_Euclidean_Distance()
-    fList6.append(euclidean_distance)
-    divergence_KL = f.get_KullbackLeiblerDivergence()
-    fList7.append(divergence_KL)
-    distance_KS = f.get_KolmogorovSmirnovDistance()
-    fList8.append(distance_KS)
-
-fList1 = normalization(fList1)
-fList2 = normalization(fList2)
-fList3 = normalization(fList3)
-fList4 = normalization(fList4)
-fList5 = normalization(fList5)
-fList6 = normalization(fList6)
-fList7 = normalization(fList7)
-fList8 = normalization(fList8)
-url_features = {}
-for i, url in enumerate(urls):
-    features = [url_label_dic[url]]
-    features.extend(fList0[i])
-    features.append(fList1[i])
-    features.append(fList2[i])
-    features.append(fList3[i])
-    features.append(fList4[i])
-    features.append(fList5[i])
-    features.append(fList6[i])
-    features.append(fList7[i])
-    features.append(fList8[i])
-    url_features[url] = features
-store_features_into_csvFile('features/url_features.csv', url_features)
+if __name__ == "__main__":
+    main()
