@@ -1,5 +1,8 @@
 import pickle
 import networkx as nx
+import pandas as pd
+
+from module.predictModule import assign_node_predict_label
 
 
 class GraphNode:
@@ -8,12 +11,16 @@ class GraphNode:
         self.train = None
         self.test = None
         self.url_labels = None
+        self.classify_threshold = None
         self.deletedEdges = {}
         self.cycles = []
         self.similarity = []
 
     def get_graph(self):
         return self.graph
+
+    def set_classify_threshold(self, threshold):
+        self.classify_threshold = threshold
 
     def init_nodes(self, data, urls):
         self.train = data['train']
@@ -49,6 +56,7 @@ class GraphNode:
         for node in self.train:
             label = self.url_labels[node]
             self.graph.nodes[node]['label'] = label
+            self.graph.nodes[node]['predict_label'] = label
             if label == 1:
                 self.graph.nodes[node]['prior_probability'] = [0, 1]
             elif label == 0:
@@ -56,25 +64,31 @@ class GraphNode:
             else:
                 raise NameError('wrong label detected')
 
-    def init_test_node_probability(self):
-        with open('./baseline/benign_probability.pickle', 'rb') as f:
-            benign_probability = pickle.load(f)
+    def add_test_node_probability(self):
+        probability_df = pd.read_csv(f"./data/probability/benign_probability_RandomForestClassifier.csv")
+        benign_probability = {}
+        # url_labels = {}
+        for index, row in probability_df.iterrows():
+            url = row['url']
+            # url_label = row['label']
+            proba_benign = row['Probability (benign)']
+            proba_malicious = row['Probability (malicious)']
+            benign_probability[url] = [proba_benign, proba_malicious]
+            # url_labels[url] = url_label
         for node in self.test:
-            proba = benign_probability[node]
-            self.graph.nodes[node]['prior_probability'] = [round(proba, 4), round(1 - proba, 4)]
+            self.graph.nodes[node]['prior_probability'] = benign_probability[node]
         # for node in self.graph.nodes:
         #     cost = self.graph.nodes[node]['prior_probability']
 
     def assign_predicted_label(self):
         for node in self.graph.nodes:
             if self.graph.nodes[node]['predict_label'] == -1:
-                cost_benign = (1 - self.graph.nodes[node]['prior_probability'][0]) + self.graph.nodes[node]['msg_sum'][
-                    0]
-                cost_phish = (1 - self.graph.nodes[node]['prior_probability'][1]) + self.graph.nodes[node]['msg_sum'][1]
-                if cost_benign < cost_phish:
-                    self.graph.nodes[node]["predict_label"] = 0
+                predict_label = assign_node_predict_label(self.graph.nodes[node], self.classify_threshold)
+                self.graph.nodes[node]['predict_label'] = predict_label
+                if predict_label == 0:
+                    self.graph.nodes[node]['prior_probability'] = [1, 0]
                 else:
-                    self.graph.nodes[node]["predict_label"] = 1
+                    self.graph.nodes[node]['prior_probability'] = [0, 1]
 
     def assign_predicted_label_to_test_urls(self):
         for url in self.test:
@@ -150,6 +164,12 @@ class GraphNode:
         return graph, edgesDeleted
 
     def has_deleted_cycles(self):
+        totalDeletedEdges = 0
+        for key, edges in self.deletedEdges.items():
+            totalDeletedEdges += len(edges)
+        print(f'current edges: {self.graph.number_of_edges()}, deleted edges: {totalDeletedEdges}')
+        if self.graph.number_of_edges() + totalDeletedEdges != 198742:
+            print("THIS WRONG")
         return len(self.deletedEdges) != 0
 
     def add_deleted_cycles(self):
@@ -190,17 +210,6 @@ class GraphNode:
         for cycle in cycleToDelete:
             del self.deletedEdges[cycle]
         return count
-
-    def has_unknown_cycles(self, idx):
-        hiddenNodes = [e for e in list(self.graph.nodes()) if self.graph.nodes[e]['predict_label'] == -1]
-        c = nx.cycle_basis(self.graph)
-        cycle = Cycle(self.graph)
-        currentCycles = cycle.get_cycles(hiddenNodes)
-        if currentCycles:
-            for edge in self.deletedEdges[idx]:
-                self.graph.remove_edge(edge[0], edge[1])
-            return True
-        return False
 
     def add_cycle_without_unknown_nodes(self):
         addCycles = 0
