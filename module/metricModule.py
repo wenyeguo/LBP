@@ -28,6 +28,25 @@ class Metric:
         self.f1Score = round(2 * (self.precision * self.recall) / (self.precision + self.recall)
                              if self.precision + self.recall != 0 else float(0), 4)
 
+    def get_ture_positive_rate(self):
+        if self.true_positive + self.false_negative != 0:
+            return round(self.true_positive / (self.true_positive + self.false_negative), 4)
+        else:
+            return 0
+
+    def get_false_positive_rate(self):
+        if (self.false_positive + self.true_negative) != 0:
+            return round(self.false_positive / (self.false_positive + self.true_negative), 4)
+        else:
+            return 0
+
+    def get_ROC_data(self):
+        self.get_metrics()
+        FPR = self.get_false_positive_rate()
+        TPR = self.get_ture_positive_rate()
+        return {'accuracy': self.accuracy, 'recall': self.recall, 'precision': self.precision, 'f1': self.f1Score,
+                'TPR': TPR, 'FPR': FPR}
+
     def get_metrics(self):
         self.count_predict_result()
         self.set_accuracy()
