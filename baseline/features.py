@@ -50,6 +50,8 @@ def normalization(numsList):
 class Feature:
     def __init__(self, url):
         self.url = url
+        if not self.url.startswith(("http://", "https://")):
+            self.url = "http://" + url
         self.url_without_scheme = None
         self.characterFrequency = None
         self.EuclideanDistance = None
@@ -131,7 +133,10 @@ class Feature:
         url_char_frequency = [0] * len(chars)
         for i in range(len(chars)):
             char = chr(97 + i)
-            url_char_frequency[i] = round((char_counts.get(char, 0) / totalChars), 3)
+            if totalChars == 0:
+                url_char_frequency[i] = 0
+            else:
+                url_char_frequency[i] = round((char_counts.get(char, 0) / totalChars), 3)
 
         return url_char_frequency
 
@@ -147,6 +152,7 @@ class Feature:
         return normalization(standard_freq)
 
     def calculate_domain_length_ratio_over_total_length(self):
+        print(self.url)
         parsed_url = urlparse(self.url)
         domain = parsed_url.netloc
         return round(len(domain) / len(self.url), 2)
@@ -191,6 +197,8 @@ class Feature:
         return totalSum
 
     def calculate_cdf(self, data):
+        if not data:
+            return {}
         sorted_keys = sorted(data.keys())
         cumulative_freq = np.cumsum([data[key] for key in sorted_keys])
         cumulative_freq /= cumulative_freq[-1]  # Normalize to [0, 1]
@@ -214,8 +222,10 @@ class Feature:
 
         url_cdf = self.calculate_cdf(url_freq_dic)
         standard_english_cdf = self.calculate_cdf(standard_english_freq_dic)
-
-        ks_similarity = self.ks_test(url_cdf, standard_english_cdf)
+        if not standard_english_cdf:
+            ks_similarity = 0
+        else:
+            ks_similarity = self.ks_test(url_cdf, standard_english_cdf)
 
         return ks_similarity
 
