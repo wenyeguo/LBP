@@ -38,8 +38,8 @@ def main():
 def load_data():
     graph_file = File(f'./data/graphs/graph_{DATA_SUFFIX}.pickle')
     url_file = File(f'./data/urls/url_{DATA_SUFFIX}.pickle')
-    simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
-    # simFile = File(f'./data/similarity/word2vec_{DATA_SUFFIX}_{TYPE_SIMILARITY}_similarity.pickle')
+    # simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
+    simFile = File(f'./data/similarity/word2vec_{DATA_SUFFIX}_{TYPE_SIMILARITY}_similarity.pickle')
     G = graph_file.get_data()
     url_labels = url_file.get_data()
     similarities = simFile.get_data()
