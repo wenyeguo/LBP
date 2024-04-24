@@ -1,13 +1,14 @@
 import pickle
 import networkx as nx
 import pandas as pd
-
 from module.predictModule import assign_node_predict_label
 
 
 class GraphNode:
-    def __init__(self, graph):
+    def __init__(self, graph, dataSuffix):
         self.graph = graph
+        self.totalEdges = graph.number_of_edges()
+        self.dataSuffix = dataSuffix
         self.train = None
         self.test = None
         self.url_labels = None
@@ -46,12 +47,6 @@ class GraphNode:
             for nbr in list(self.graph.neighbors(node)):
                 self.graph.nodes[node]["msg_nbr"][nbr] = [0, 0]
 
-    def check_if_all_neighbors_known(self, node):
-        for nbr, msg in self.graph.nodes[node]['msg_nbr'].items():
-            if nbr not in self.test:
-                return False
-        return True
-
     def init_train_node(self):
         for node in self.train:
             label = self.url_labels[node]
@@ -65,20 +60,18 @@ class GraphNode:
                 raise NameError('wrong label detected')
 
     def add_test_node_probability(self):
-        probability_df = pd.read_csv(f"./data/probability/benign_probability_RandomForestClassifier.csv")
+        probability_df = pd.read_csv(
+            f"./data/probability/benign_probability_RandomForestClassifier_{self.dataSuffix}.csv")
+        # probability_df = pd.read_csv(f"./data/probability/benign_probability_RandomForestClassifier_final.csv")
+
         benign_probability = {}
-        # url_labels = {}
         for index, row in probability_df.iterrows():
             url = row['url']
-            # url_label = row['label']
             proba_benign = row['Probability (benign)']
             proba_malicious = row['Probability (malicious)']
             benign_probability[url] = [proba_benign, proba_malicious]
-            # url_labels[url] = url_label
         for node in self.test:
             self.graph.nodes[node]['prior_probability'] = benign_probability[node]
-        # for node in self.graph.nodes:
-        #     cost = self.graph.nodes[node]['prior_probability']
 
     def assign_predicted_label(self):
         for node in self.graph.nodes:
@@ -89,43 +82,6 @@ class GraphNode:
                     self.graph.nodes[node]['prior_probability'] = [1, 0]
                 else:
                     self.graph.nodes[node]['prior_probability'] = [0, 1]
-
-    def assign_predicted_label_to_test_urls(self):
-        for url in self.test:
-            cost_benign = (1 - self.graph.nodes[url]['prior_probability'][0]) + self.graph.nodes[url]['msg_sum'][0]
-            cost_phish = (1 - self.graph.nodes[url]['prior_probability'][1]) + self.graph.nodes[url]['msg_sum'][1]
-            if cost_benign < cost_phish:
-                self.graph.nodes[url]["predict_label"] = 0
-            else:
-                self.graph.nodes[url]["predict_label"] = 1
-
-    def calculate_performance(self):
-        TP_B_B, TN_M_M, FP_B_M, FN_M_B = self.compare_hidden_nodes_predicted_label_with_actual_label()
-        accuracy = round((TN_M_M + TP_B_B) / len(self.test) if len(self.test) != 0 else float(0), 4)
-        recall = round(TP_B_B / (TP_B_B + FN_M_B) if TP_B_B + FN_M_B != 0 else float(0), 4)
-        precision = round(TP_B_B / (TP_B_B + FP_B_M) if TP_B_B + FP_B_M != 0 else float(0), 4)
-        f1score = round(2 * (precision * recall) / (precision + recall) if precision + recall != 0 else float(0), 4)
-        return accuracy, recall, precision, f1score
-
-    def compare_hidden_nodes_predicted_label_with_actual_label(self):
-        test_right, test_wrong = 0, 0
-        true_positive, true_negative, false_positive, false_negative = 0, 0, 0, 0
-        for url in self.test:
-            actual_label = self.url_labels[url]
-            predict_label = self.graph.nodes[url]['predict_label']
-            if actual_label == predict_label:
-                test_right += 1
-                if predict_label == 0:
-                    true_positive += 1
-                else:
-                    true_negative += 1
-            else:
-                test_wrong += 1
-                if predict_label == 0:
-                    false_positive += 1
-                else:
-                    false_negative += 1
-        return true_positive, true_negative, false_positive, false_negative
 
     def remove_cycles(self):
         hiddenNodes = [e for e in list(self.graph.nodes()) if self.graph.nodes[e]['label'] == 0.5]
@@ -168,24 +124,21 @@ class GraphNode:
         for key, edges in self.deletedEdges.items():
             totalDeletedEdges += len(edges)
         print(f'current edges: {self.graph.number_of_edges()}, deleted edges: {totalDeletedEdges}')
-        if self.graph.number_of_edges() + totalDeletedEdges != 198742:
+        if self.graph.number_of_edges() + totalDeletedEdges != self.totalEdges:
             print("THIS WRONG")
         return len(self.deletedEdges) != 0
 
     def add_deleted_cycles(self):
-        # 1. add all known nodes
+        # 1. add cycles with all known nodes
         addKnownCycles = self.add_cycle_without_unknown_nodes()
-        # print(f'Add {addKnownCycles} cycles with only known nodes')
-
-        addWithOneNodeCycle = self.add_cycle_with_at_least_one_known_node()
-        # print(f'Add {addWithOneNodeCycle} cycles with at least one known node')
-        # TODO => if hidden nodes graph has cycle, if has delete cycle
-        if addKnownCycles + addWithOneNodeCycle > 0:
+        # 2. add cycles with at least one known nodes
+        addWithOneKnownNodeCycle = self.add_cycle_with_at_least_one_known_node()
+        # 3. remove cycles that only contain unknown nodes
+        if addKnownCycles + addWithOneKnownNodeCycle > 0:
             self.remove_unknown_cycles()
 
     def remove_unknown_cycles(self):
         hiddenNodes = [e for e in list(self.graph.nodes()) if self.graph.nodes[e]['predict_label'] == -1]
-        # TODO not contain all nodes, why??
         edgesDeleted = {}
         graph = self.create_subgraph_only_contain_hidden_nodes(hiddenNodes)
         while True:
@@ -213,7 +166,6 @@ class GraphNode:
 
     def add_cycle_without_unknown_nodes(self):
         addCycles = 0
-        # TODO dic changed during iteration, cycleToDelete = []
         cycleToDelete = []
         for cycle, edges in self.deletedEdges.items():
             if self.allKnownNodes(cycle):
@@ -224,22 +176,6 @@ class GraphNode:
         for cycle in cycleToDelete:
             del self.deletedEdges[cycle]
         return addCycles
-
-    def add_one_cycle_with_unknown_nodes(self):
-        addedUnknownNodes = []
-        # add 1 cycle (the 1st has known label cycle) each time
-        for idx, cycle in enumerate(self.cycles):
-            if self.cycles[idx]:
-                if not self.allUnknownNodes(cycle):
-                    # add edges back and remove cycle from list
-                    for node in cycle:
-                        if self.graph.nodes[node]['predict_label'] == -1:
-                            addedUnknownNodes.append(node)
-                    for edge in self.deletedEdges[idx]:
-                        self.graph.add_edge(edge[0], edge[1])
-                    self.cycles[idx] = []
-                    break
-        return addedUnknownNodes
 
     def allKnownNodes(self, cycle):
         for node in cycle:
