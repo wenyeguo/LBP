@@ -20,7 +20,7 @@ class File:
             self.data = pickle.load(f)
 
     def write_data_to_file(self):
-        with open(self.filename, 'wb+') as f:
+        with open(self.filename, 'wb') as f:
             pickle.dump(self.data, f)
 
     def store_data_into_csvFile(self, rowName, data):
