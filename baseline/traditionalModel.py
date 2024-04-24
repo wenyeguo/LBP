@@ -27,7 +27,7 @@ def get_metric(model, filename):
 def store_probability(model, filename):
     """store probability into csv file"""
     features_df = pd.read_csv(filename)
-    features = features_df.drop(['url', 'label'], axis=1)
+    features = features_df.drop(['url', 'label', 'type'], axis=1)
     urls = features_df['url']
     labels = features_df['label']
     predictions = cross_val_predict(model, features, labels, cv=K_FOLD, method='predict_proba')
