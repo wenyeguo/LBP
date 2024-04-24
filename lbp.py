@@ -30,7 +30,7 @@ def main():
         if len(sys.argv) == 10:
             SIMILARITY_THRESHOLD1 = float(sys.argv[8])
             SIMILARITY_THRESHOLD2 = float(sys.argv[9])
-            print(f'set t1, t2 = {SIMILARITY_THRESHOLD1}, {SIMILARITY_THRESHOLD1}')
+            print(f'set t1, t2 = {SIMILARITY_THRESHOLD1}, {SIMILARITY_THRESHOLD2}')
     crossValidation()
 
 
