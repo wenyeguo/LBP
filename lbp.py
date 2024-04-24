@@ -28,7 +28,6 @@ def main():
         ADD_PRIOR_PROBABILITY = True if sys.argv[6].lower() == "true" else False
         CLASSIFY_THRESHOLD = float(sys.argv[7])
         if len(sys.argv) == 10:
-            print(f'set t1, t2')
             SIMILARITY_THRESHOLD1 = float(sys.argv[8])
             SIMILARITY_THRESHOLD2 = float(sys.argv[9])
             print(f'set t1, t2 = {SIMILARITY_THRESHOLD1}, {SIMILARITY_THRESHOLD1}')
