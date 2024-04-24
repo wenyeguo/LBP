@@ -9,76 +9,45 @@ N_FOLDS = 5
 DATA_SUFFIX = "final"
 EMBEDDING_PREFIX = "word2vec"
 TYPE_SIMILARITY = "rbf"
-TYPE_EDGE_POTENTIAL = "sim_only"
+TYPE_EDGE_POTENTIAL = "sim"
 DELETE_CYCLE = True
 ADD_PRIOR_PROBABILITY = True
 CLASSIFY_THRESHOLD = 0.5
 SIMILARITY_THRESHOLD1 = 0.6
-SIMILARITY_THRESHOLD2 = 0.4
+SIMILARITY_THRESHOLD2 = 1.0
 
 
 def main():
-    global DATA_SUFFIX, EMBEDDING_PREFIX, TYPE_SIMILARITY, TYPE_EDGE_POTENTIAL, SIMILARITY_THRESHOLD1, \
-        CLASSIFY_THRESHOLD, SIMILARITY_THRESHOLD2, DELETE_CYCLE, ADD_PRIOR_PROBABILITY
+    global DATA_SUFFIX, EMBEDDING_PREFIX, TYPE_SIMILARITY, TYPE_EDGE_POTENTIAL, SIMILARITY_THRESHOLD1, CLASSIFY_THRESHOLD, SIMILARITY_THRESHOLD2, DELETE_CYCLE, ADD_PRIOR_PROBABILITY
     if len(sys.argv) > 7:
         DATA_SUFFIX = sys.argv[1]
         EMBEDDING_PREFIX = sys.argv[2]
         TYPE_SIMILARITY = sys.argv[3]
         TYPE_EDGE_POTENTIAL = sys.argv[4]
-        DELETE_CYCLE = sys.argv[5]
-        ADD_PRIOR_PROBABILITY = sys.argv[6]
+        DELETE_CYCLE = True if sys.argv[5].lower() == "true" else False
+        ADD_PRIOR_PROBABILITY = True if sys.argv[6].lower() == "true" else False
         CLASSIFY_THRESHOLD = float(sys.argv[7])
-        if len(sys.argv) == 9:
+        if len(sys.argv) == 10:
+            print(f'set t1, t2')
             SIMILARITY_THRESHOLD1 = float(sys.argv[8])
             SIMILARITY_THRESHOLD2 = float(sys.argv[9])
-    print(DATA_SUFFIX, EMBEDDING_PREFIX, TYPE_SIMILARITY, TYPE_EDGE_POTENTIAL, DELETE_CYCLE, ADD_PRIOR_PROBABILITY,
-          CLASSIFY_THRESHOLD, SIMILARITY_THRESHOLD1, SIMILARITY_THRESHOLD2)
-
+            print(f'set t1, t2 = {SIMILARITY_THRESHOLD1}, {SIMILARITY_THRESHOLD1}')
     crossValidation()
-    # find_edge_potential_threshold()
-    # find_classify_threshold()
-
-
-def find_edge_potential_threshold():
-    global SIMILARITY_THRESHOLD1, SIMILARITY_THRESHOLD2
-    t1 = [n / 10 for n in range(11)]
-    t2 = [n / 10 for n in range(11)]
-    results = {}
-    for i in t1:
-        for j in t2:
-            SIMILARITY_THRESHOLD1, SIMILARITY_THRESHOLD2 = i, j
-            rs = crossValidation()
-            key = f'{i}:{j}'
-            results[key] = rs
-    fileT = File(f'graph_{DATA_SUFFIX}_{TYPE_SIMILARITY}_{TYPE_EDGE_POTENTIAL}_result.csv')
-    fileT.store_threshold_result_into_csv_file(results)
-
-
-def find_classify_threshold():
-    global CLASSIFY_THRESHOLD
-    performance = [[] for _ in range(11)]
-    for i in range(11):
-        CLASSIFY_THRESHOLD = i / 10
-        rs = crossValidation()
-        performance[i] = rs
-    print(f'DIFFERENT THRESHOLD RESULT: accuracy, precision, recall, F1, TPR, FPR')
-    for p in performance:
-        print(p)
 
 
 def load_data():
     graph_file = File(f'./data/graphs/graph_{DATA_SUFFIX}.pickle')
     url_file = File(f'./data/urls/url_{DATA_SUFFIX}.pickle')
-    simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
+    # simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
+    simFile = File(f'./data/similarity/word2vec_{DATA_SUFFIX}_{TYPE_SIMILARITY}_similarity.pickle')
     G = graph_file.get_data()
     url_labels = url_file.get_data()
     similarities = simFile.get_data()
-    print("Nodes:", G.number_of_nodes(), ", Edges:", G.number_of_edges())
+    print("Graph Nodes:", G.number_of_nodes(), ", Edges:", G.number_of_edges())
     return G, url_labels, similarities
 
 
 def crossValidation():
-    # return test_with_specific_datasets(graph, url_labels, similarity)
     graph, url_labels, similarity = load_data()
     kf = Folds(N_FOLDS)
     kf.init_KFold(list(url_labels.keys()))
@@ -99,19 +68,22 @@ def test_with_specific_datasets(graph, url_labels, similarity):
 
 
 def train_model(graph, url_labels, similarity, datasets):
-    print('Passing Message ... ')
+    print('Start Train Model ... ')
     start_time = time.perf_counter()
     with multiprocessing.Pool(processes=N_FOLDS) as pool:
         try:
             if DELETE_CYCLE:
+                print(DELETE_CYCLE)
+                print('Delete cycle worker')
                 outputs = pool.map(Worker('cycle').run, [(
-                    ADD_PRIOR_PROBABILITY, TYPE_EDGE_POTENTIAL, CLASSIFY_THRESHOLD,
+                    DATA_SUFFIX, ADD_PRIOR_PROBABILITY, TYPE_EDGE_POTENTIAL, CLASSIFY_THRESHOLD,
                     SIMILARITY_THRESHOLD1, SIMILARITY_THRESHOLD2, graph,
                     url_labels, similarity, d, datasets.index(d)) for d in
                     datasets])
             else:
+                print('Normal worker')
                 outputs = pool.map(Worker('normal').run, [(
-                    ADD_PRIOR_PROBABILITY, TYPE_EDGE_POTENTIAL, CLASSIFY_THRESHOLD,
+                    DATA_SUFFIX, ADD_PRIOR_PROBABILITY, TYPE_EDGE_POTENTIAL, CLASSIFY_THRESHOLD,
                     SIMILARITY_THRESHOLD1, SIMILARITY_THRESHOLD2, graph,
                     url_labels, similarity, d, datasets.index(d)) for d in
                     datasets])
@@ -147,14 +119,15 @@ def calculate_average_performance(outputs):
         f'Type Embedding - {EMBEDDING_PREFIX} \n'
         f'Type Edge Potential - {TYPE_EDGE_POTENTIAL}\n'
         f'Type Similarity - {TYPE_SIMILARITY}\n'
-        f'Classify Threshold - {CLASSIFY_THRESHOLD}\n'
+        f'Classification Threshold - {CLASSIFY_THRESHOLD}\n'
         f'Delete Cycles - {DELETE_CYCLE}\n'
         f'With Prior Probability - {ADD_PRIOR_PROBABILITY}'
     )
 
     if SIMILARITY_THRESHOLD1 and SIMILARITY_THRESHOLD2:
         print(f'Threshold1 - {SIMILARITY_THRESHOLD1}, Threshold2 - {SIMILARITY_THRESHOLD2}')
-    print(f'Averaged accuracy, precision, recall, F1, TPR, FPR : {accuracy}, {precision}, {recall}, {f1}, {tpr}, {fpr}')
+    print(f'Averaged accuracy, precision, recall, F1: {accuracy}, {precision}, {recall}, {f1}')
+    print(f'TPR, FPR: {tpr}, {fpr}')
     return [accuracy, precision, recall, f1, tpr, fpr]
 
 
