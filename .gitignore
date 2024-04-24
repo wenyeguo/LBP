@@ -60,7 +60,7 @@ baseline/.DS_Store
 /module/dataset_20.csv
 /embedding/word2vec_emb_data/domain_emb_file.json
 /embedding/word2vec_emb_data/domain_emb_file.pickle
-/data_processing/data/new_dataset.csv
+/data_processing/data/dataset_306K.csv
 /logfile_old_dataset/final_thresholds_max.csv
 /logfile_old_dataset/final_thresholds_min.csv
 /embedding/wordbased/g_multiprocess.py
@@ -68,3 +68,4 @@ baseline/.DS_Store
 /data/graph_new.pickle
 /embedding/graphbased/graphbased_emb.py
 /data_processing/data_preprocessing.py
+/logfiles/extract_results_from_logfile.py
