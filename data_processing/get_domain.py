@@ -18,7 +18,7 @@ def get_domain(url):
     Input: Path of urls dataset
     Output: Save the dataset including domain into a separate CSV file
 '''
-file = 'data/final_dataset.csv'
+file = 'data/dataset_306K.csv'
 df = pd.read_csv(file)
 df['domain'] = df['url'].apply(get_domain)
 df.to_csv("dataset_with_all_features.csv", index=False)

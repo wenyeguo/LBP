@@ -100,7 +100,7 @@ def get_substrings(url):
     Input: Path of urls dataset
     Output: Save the dataset including substrings into a separate CSV file
 '''
-file = './data/final_dataset.csv'
+file = 'data/dataset_306K.csv'
 df = pd.read_csv(file)
 df['substrings'] = df['url'].apply(get_substrings)
 df['substrings'] = df['substrings'].apply(lambda x: ', '.join(x))

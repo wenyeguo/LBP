@@ -5,7 +5,7 @@ from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 """
 Read URLs and Substrings from dataset
 """
-file = '../data_processing/data/final_dataset.csv'
+file = '../data_processing/data/dataset_306K.csv'
 df = pd.read_csv(file)
 urls = df['url'].str.cat(sep=', ').split(', ')
 words = df['filtered_substrings'].str.cat(sep=', ').split(', ')

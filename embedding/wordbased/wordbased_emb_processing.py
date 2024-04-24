@@ -101,7 +101,7 @@ def main():
     model = read_pickle_file(filename)
 
     # Step 2: get words and urls vector from model
-    file = '../data_processing/data/final_dataset.csv'
+    file = '../data_processing/data/dataset_306K.csv'
     df = pd.read_csv(file)
     urls = df['url'].str.cat(sep=', ').split(', ')
     words = df['filtered_substrings'].str.cat(sep=', ').split(', ')
