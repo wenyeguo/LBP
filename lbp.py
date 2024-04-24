@@ -6,7 +6,7 @@ from module.foldModule import Folds
 from module.workerModule import Worker
 
 N_FOLDS = 5
-DATA_SUFFIX = "final"
+DATA_SUFFIX = "100"
 EMBEDDING_PREFIX = "word2vec"
 TYPE_SIMILARITY = "rbf"
 TYPE_EDGE_POTENTIAL = "sim"
@@ -38,8 +38,8 @@ def main():
 def load_data():
     graph_file = File(f'./data/graphs/graph_{DATA_SUFFIX}.pickle')
     url_file = File(f'./data/urls/url_{DATA_SUFFIX}.pickle')
-    # simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
-    simFile = File(f'./data/similarity/word2vec_{DATA_SUFFIX}_{TYPE_SIMILARITY}_similarity.pickle')
+    simFile = File(f'./data/similarity/word2vec_{TYPE_SIMILARITY}_similarity.pickle')
+    # simFile = File(f'./data/similarity/word2vec_{DATA_SUFFIX}_{TYPE_SIMILARITY}_similarity.pickle')
     G = graph_file.get_data()
     url_labels = url_file.get_data()
     similarities = simFile.get_data()
@@ -73,7 +73,6 @@ def train_model(graph, url_labels, similarity, datasets):
     with multiprocessing.Pool(processes=N_FOLDS) as pool:
         try:
             if DELETE_CYCLE:
-                print(DELETE_CYCLE)
                 print('Delete cycle worker')
                 outputs = pool.map(Worker('cycle').run, [(
                     DATA_SUFFIX, ADD_PRIOR_PROBABILITY, TYPE_EDGE_POTENTIAL, CLASSIFY_THRESHOLD,
