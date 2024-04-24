@@ -1,107 +1,100 @@
 import pickle
-from new_class import URL, load_data
 import networkx as nx
+import pandas as pd
 
 
-def add_node_to_graph(data, graph):
-    for i in data:
-        if not graph.has_node(i):
-            graph.add_node(i)
+def add_edge_between_url_domain(graph, df):
+    count = 0
+    for idx, row in df.iterrows():
+        url = row['url']
+        domain = row['domain']
+        if not graph.has_edge(url, domain):
+            graph.add_edge(url, domain)
         else:
-            print("NODE ALREADY ADDED", i)
+            count += 1
+            print(url, ":", domain)
+    print(f"url_domain, duplicate edges {count}")
 
 
-def add_edge_between_url_domain(graph, nodes, urls, domains):
-    for node in nodes:
-        url_string = node.get_url()
-        url_domain = node.get_domain()
-        if url_string in urls:
-            if url_domain in domains:
-                if not graph.has_edge(url_string, url_domain):
-                    graph.add_edge(url_string, url_domain)
-                # else:
-                #     print("EDGE ALREADY ADDED")
+def add_edge_between_domain_ip(graph, df):
+    count = 0
+    for idx, row in df.iterrows():
+        domain = row['domain']
+        addresses = row['ip_address'].split(', ')
+        for address in addresses:
+            if not graph.has_edge(domain, address):
+                graph.add_edge(domain, address)
+            else:
+                count += 1
+    print(f"domain_ip, duplicate edges {count}")
 
 
-def add_edge_between_domain_IP(graph, nodes, domains, IP):
-    for node in nodes:
-        url_domain = node.get_domain()
-        url_IPs = node.get_address()
-        for k in url_IPs:
-            if url_domain in domains:
-                if k in IP:
-                    if not graph.has_edge(url_domain, k):
-                        graph.add_edge(url_domain, k)
-                    # else:
-                    #     print("EDGE ALREADY ADDED")
+def add_edge_between_domain_nameserver(graph, df):
+    count = 0
+    for idx, row in df.iterrows():
+        domain = row['domain']
+        nameservers = row['nameservers'].split(', ')
+        for server in nameservers:
+            if not graph.has_edge(domain, server):
+                graph.add_edge(domain, server)
+            else:
+                count += 1
+    print(f"domain_nameserver, duplicate edges {count}")
 
 
-def add_edge_between_domain_server(graph, nodes, domains, nameservers):
-    for node in nodes:
-        url_domain = node.get_domain()
-        url_nameservers = node.get_nameserver()
-        for n in url_nameservers:
-            if url_domain in domains:
-                if n in nameservers:
-                    if not graph.has_edge(url_domain, n):
-                        graph.add_edge(url_domain, n)
-                    # else:
-                    #     print("EDGE ALREADY ADDED")
+def add_edge_between_url_substring(graph, df):
+    count = 0
+    for idx, row in df.iterrows():
+        url = row['url']
+        if not isinstance(row['filtered_substrings'], str):
+            continue
+        words = row['filtered_substrings'].split(', ')
+        for word in words:
+            if not graph.has_edge(url, word):
+                graph.add_edge(url, word)
+            else:
+                count += 1
+
+    print(f"url_filtered_substrings, duplicate edges {count}")
 
 
-def add_edge_between_url_substring(graph, nodes, urls, substrings):
-    for node in nodes:
-        url_string = node.get_url()
-        url_substrings = node.get_substrings()
-        if url_string in urls:
-            for sub in url_substrings:
-                if sub in substrings:
-                    if not graph.has_edge(url_string, sub):
-                        graph.add_edge(url_string, sub)
-                    # else:
-                    #     print("EDGE ALREADY ADDED")
+def extract_subset(data):
+    """ Extract a subset from the data."""
+    benign_data = data[data['type'] == 'benign']
+    malicious_data = data[data['type'] == 'phishing']
+    size = 100 * 1000 - malicious_data.shape[0]
+    random_benign_data = benign_data.sample(n=size, random_state=42)
+    print(f' benign : malicious: {random_benign_data.shape}: {malicious_data.shape}')
+    combined_df = pd.concat([random_benign_data, malicious_data], ignore_index=True)
+    combined_df.to_csv("data/dataset_100K.csv", index=False)
 
 
-# main code
-dir_name = input("Please enter directory name: ")
-# dir_name = './features/data_20000/'
-print("Load data from directory: '", dir_name, "'")
-url_labels = load_data(dir_name + "urls")
-urls = url_labels.keys()
-domains = load_data(dir_name + "domains")
-substrings = load_data(dir_name + "substrings")
-IP = load_data(dir_name + "address")
-nameservers = load_data(dir_name + "nameservers")
-nodes = load_data(dir_name + "nodes")
-print("URLs       ", len(urls))
-print("Domains    ", len(domains))
-print("substrings ", len(substrings))
-print("IP         ", len(IP))
-print("Nameserver ", len(nameservers))
-print("Nodes      ", len(nodes))
+"""
+    Create Graph with networkx
+    Input: path of url dataset
+    Output: Save graph into a pickle file
+"""
+file = 'data/dataset_20.csv'
+df = pd.read_csv(file)
+print(df.shape)
 
-# # create graph
-G = nx.Graph()
+"""
+    Add edges: 
+        url & domain
+        domain & IP
+        domain & nameserver
+        url & substrings
+"""
+graph = nx.Graph()
+add_edge_between_url_domain(graph, df)
+add_edge_between_domain_ip(graph, df)
+add_edge_between_domain_nameserver(graph, df)
+add_edge_between_url_substring(graph, df)
+print("FINISH ADD EDGES")
+print("Nodes Size:", graph.number_of_nodes())
+print("Edges Size:", graph.number_of_edges())
 
-# add nodes: url, domain, ip, nameserver, substrings
-add_node_to_graph(urls, G)
-add_node_to_graph(domains, G)
-add_node_to_graph(nameservers, G)
-add_node_to_graph(substrings, G)
-add_node_to_graph(IP, G)
-print("FINISH ADD NODE")
-
-# add edges: url & domain, domain & IP, domain & name server, url & substrings
-add_edge_between_url_domain(G, nodes, urls, domains)
-add_edge_between_domain_IP(G, nodes, domains, IP)
-add_edge_between_domain_server(G, nodes, domains, nameservers)
-add_edge_between_url_substring(G, nodes, urls, substrings)
-print("FINISH ADD EDGE")
-# #
-print("Nodes Size:", G.number_of_nodes())
-print("Edges Size:", G.number_of_edges())
-
-# # store graph
-graph = input("Please enter graph filename to store: ")
-with open(graph, 'wb') as f:
-    pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
+# store graph
+graph_name = 'graph_size.pickle'
+with open(graph_name, 'wb') as f:
+    pickle.dump(graph, f)

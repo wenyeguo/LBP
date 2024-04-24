@@ -1,18 +1,30 @@
-from new_class import load_data, store_data, URL
+import pandas as pd
 from urllib.parse import urlparse
 import re
 
 
 def url_parser(url):
-    parts = urlparse(url)
-    paras = {
-        'scheme': parts.scheme,
-        'netloc': parts.netloc,
-        'path': parts.path,
-        'params': parts.params,
-        'query': parts.query,
-        'fragment': parts.fragment
-    }
+    if "http" not in url:
+        url = "http://" + url
+    try:
+        parsed_url = urlparse(url)
+    except ValueError as e:
+        if str(e) == "Invalid IPv6 URL":
+            print("Skipping invalid IPv6 URL:", url)
+            parsed_url = None
+        else:
+            raise e
+    if parsed_url:
+        paras = {
+            'scheme': parsed_url.scheme,
+            'netloc': parsed_url.netloc,
+            'path': parsed_url.path,
+            'params': parsed_url.params,
+            'query': parsed_url.query,
+            'fragment': parsed_url.fragment
+        }
+    else:
+        paras = None
     return paras
 
 
@@ -53,10 +65,11 @@ def segment_query(query):
     return query_parts
 
 
-def extract_substrings(url):
+def get_substrings(url):
     paras = url_parser(url)
-    # has params, segment it same as path (params using ';' separate with path)
     substrings = []
+    if not paras:
+        return substrings
     if paras["netloc"] != '':
         # print("netloc", paras["netloc"])
         netloc_parts = segment_netloc(paras["netloc"])
@@ -66,7 +79,9 @@ def extract_substrings(url):
         path_parts = segment_path(paras["path"])
         substrings.extend(path_parts)
     if paras["params"] != '':
+        # print(url)
         # print("params", paras["params"])
+        # print(paras['path'])
         path_parts = segment_path(paras["params"])
         substrings.extend(path_parts)
     if paras['query'] != '':
@@ -77,23 +92,17 @@ def extract_substrings(url):
         # print("fragment", paras["fragment"])
         substrings.append(paras["fragment"])
     # print(substrings)
+   
     return substrings
 
 
-# load nodes, extract and update nodes substrings
-def update_substring(nodes):
-    for node in nodes:
-        node_url = node.get_url()
-        words = extract_substrings(node_url)
-        if words:
-            node.set_substrings(words)
-    return nodes
-
-
-# main code
-file = input("Please Enter nodes filename")
-# file = './features/d/nodes_address'
-nodes = load_data(file)
-new_nodes = update_substring(nodes)
-store_data(new_nodes, './features/d/nodes_substrings')
+'''
+    Input: Path of urls dataset
+    Output: Save the dataset including substrings into a separate CSV file
+'''
+file = './data/final_dataset.csv'
+df = pd.read_csv(file)
+df['substrings'] = df['url'].apply(get_substrings)
+df['substrings'] = df['substrings'].apply(lambda x: ', '.join(x))
+df.to_csv("filtered_dataset_with_substrings.csv", index=False)
 
