@@ -2,6 +2,7 @@ import copy
 import networkx as nx
 from module.predictModule import assign_node_predict_label
 
+
 class Message:
     def __init__(self, graph, edge_type, similarity):
         self.prev_graph = copy.deepcopy(graph)
@@ -40,15 +41,6 @@ class Message:
                 msg_nbr_copy = self.graph.nodes[node]['msg_nbr'][nbr].copy()
                 self.nodesMsgDic[node]['msg_nbr'][nbr] = msg_nbr_copy
 
-    def init_nodes_message_dictionary_cycle(self, data):
-        for node in data:
-            msg_sum_copy = self.graph.nodes[node]['msg_sum'].copy()
-            self.nodesMsgDic[node] = {'msg_sum': msg_sum_copy,
-                                      'msg_nbr': {}}
-            for nbr in self.graph.nodes[node]['msg_nbr']:
-                msg_nbr_copy = self.graph.nodes[node]['msg_nbr'][nbr].copy()
-                self.nodesMsgDic[node]['msg_nbr'][nbr] = msg_nbr_copy
-
     def receive_message(self, receiver):
         self.set_receive_node_name(receiver)
         self.init_receive_node_info()
@@ -64,6 +56,7 @@ class Message:
         for nbr in self.graph.nodes[self.receiver]['msg_nbr']:
             msg_nbr_copy = self.graph.nodes[self.receiver]['msg_nbr'][nbr].copy()
             self.receive_node_information['msg_nbr'][nbr] = msg_nbr_copy
+
     def update_receiver_node_info(self, msg):
         for i in range(2):
             self.receive_node_information['msg_sum'][i] = (
@@ -72,29 +65,6 @@ class Message:
                       + msg[i],
                       10))
             self.receive_node_information['msg_nbr'][self.sender][i] = round(msg[i], 10)
-
-    def send_message(self, sender):
-        self.set_send_node_name(sender)
-        for nbr in self.graph.neighbors(self.sender):
-            if self.graph.nodes[nbr]["label"] == 0.5:
-                self.set_receive_node_name(nbr)
-                msg = self.min_sum('normal')
-
-                self.update_nodes_message_dictionary(msg)
-
-    def send_message_to_cycle_neighbors(self):
-        for nbr in self.graph.neighbors(self.sender):
-            if self.graph.nodes[nbr]["predict_label"] == -1:
-                self.set_receive_node_name(nbr)
-                msg = self.min_sum('normal')
-                self.update_nodes_message_dictionary(msg)
-
-    def send_message_to_neighbors(self):
-        for nbr in self.graph.neighbors(self.sender):
-            if self.graph.nodes[nbr]["label"] == 0.5:
-                self.set_receive_node_name(nbr)
-                msg = self.min_sum('normal')
-                self.update_nodes_message_dictionary(msg)
 
     def update_nodes_message_dictionary(self, msg):
         for i in range(2):
@@ -174,10 +144,8 @@ class Message:
     def edge_potential_epsilon(self, assumeLabel):
         e = 0.0001
         if assumeLabel == 0:
-            # edges = [0.5 + e, 0.5 - e]
             edges = [0.5 - e, 0.5 + e]
         else:
-            # edges = [0.5 - e, 0.5 + e]
             edges = [0.5 + e, 0.5 - e]
         return edges
 
@@ -202,9 +170,7 @@ class Message:
             edges = [min(self.ths2, sim), max(self.ths1, 1 - sim)]
         return edges
 
-    # assign label to nodes which has known neighbor
-    # TODO assign node label if it receive msg from more than half neighbors
-    # if node has knownlabel, predict hiddenNodes label
+    # predict hiddenNodes label, if one of its neighbors is known
     def assignNodeLabels(self, hiddenNodes, classify_threshold):
         connected_components = list(nx.connected_components(self.graph))
         for nodes in connected_components:
@@ -222,24 +188,6 @@ class Message:
                             self.graph.nodes[node]['prior_probability'] = [1, 0]
                         else:
                             self.graph.nodes[node]['prior_probability'] = [0, 1]
-                        # if self.receivedFromMajorityNeighbors(node, -1):
-                        #     self.predict_nodeLabel(node)
-            # else:
-            #     print()
-
-    def convergedNodes(self, nodes):
-        converged_nodes = 0
-        for node in nodes:
-            new_msg = self.graph.nodes[node]['msg_sum']
-            old_msg = self.prev_graph.nodes[node]['msg_sum']
-            k = 0
-            for i in range(2):
-                d = abs(new_msg[i] - old_msg[i])
-                if d < 0.001:
-                    k += 1
-            if k == 2:
-                converged_nodes += 1
-        return converged_nodes
 
     def count_converged_nodes(self, nodes):
         converged_nodes = 0
@@ -254,13 +202,3 @@ class Message:
             if k == 2:
                 converged_nodes += 1
         return converged_nodes
-
-    def receivedFromMajorityNeighbors(self, node, percent):
-        count = 0
-        totalNeighbors = len(self.graph.nodes[node]['msg_nbr'])
-        for neighbor, message in self.graph.nodes[node]['msg_nbr'].items():
-            if message != [0, 0]:
-                count += 1
-        if count / totalNeighbors * 100 > percent:
-            return True
-        return False
