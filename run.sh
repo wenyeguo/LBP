@@ -4,7 +4,7 @@
 filename="53K"
 
 log_filename="logfile_${filename}.log"
-echo "With prior probability, deleted cycle - sim with classification threshold 0.5, threshold1 0.6, threshold2 1.0"
+echo "Train model with classification threshold 0.5, threshold1 0.6, threshold2 1.0 on dataset ${filename}"
 python3 lbp.py "${filename}" word2vec rbf sim False True 0.5 0.6 1.0 >> "$log_filename"
 # normal, with cycles
 # echo "With prior probability, with cycle - t1"
